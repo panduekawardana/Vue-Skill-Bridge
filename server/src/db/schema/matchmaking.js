@@ -1,4 +1,4 @@
-import { mysqlTable, varchar, decimal, json, timestamp, mysqlEnum, unique } from "drizzle-orm/mysql-core";
+import { mysqlTable, varchar, decimal, json, timestamp, mysqlEnum, unique, index } from "drizzle-orm/mysql-core";
 import { students } from "./students.js";
 import { internshipNeeds } from "./internshipNeeds.js";
 
@@ -27,5 +27,9 @@ export const matchmaking = mysqlTable(
     respondedAt: timestamp("responded_at"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
-  (table) => [unique("uq_match_student_need").on(table.studentId, table.needId)],
+  (table) => [
+    unique("uq_match_student_need").on(table.studentId, table.needId),
+    index("idx_match_student_status").on(table.studentId, table.status),
+    index("idx_match_need_status").on(table.needId, table.status),
+  ],
 );
