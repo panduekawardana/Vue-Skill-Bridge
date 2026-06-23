@@ -185,6 +185,107 @@ async function createInternshipFromMatch(match) {
   }
 }
 
+export const studentApplyToNeed = asyncHandler(async (req, res) => {
+  const needId = req.params.needId;
+
+  const [studentProfile] = await db.select().from(students).where(eq(students.userId, req.user.userId)).limit(1);
+  if (!studentProfile) throw new AppError("Student profile not found", 404);
+
+  const [need] = await db
+    .select({
+      id: internshipNeeds.id,
+      title: internshipNeeds.title,
+      status: internshipNeeds.status,
+      requiredSkills: internshipNeeds.requiredSkills,
+      requiredMajor: internshipNeeds.requiredMajor,
+      slotCount: internshipNeeds.slotCount,
+      slotFilled: internshipNeeds.slotFilled,
+      durationDays: internshipNeeds.durationDays,
+      compensation: internshipNeeds.compensation,
+      umkmId: internshipNeeds.umkmId,
+      startDate: internshipNeeds.startDate,
+    })
+    .from(internshipNeeds)
+    .where(eq(internshipNeeds.id, needId))
+    .limit(1);
+
+  if (!need) throw new AppError("Internship need not found", 404);
+  if (need.status !== "open") throw new AppError("This internship is no longer open", 400);
+
+  const [existing] = await db
+    .select()
+    .from(matchmaking)
+    .where(and(eq(matchmaking.studentId, studentProfile.id), eq(matchmaking.needId, needId)))
+    .limit(1);
+
+  if (existing) throw new AppError("You have already applied to this need", 400);
+
+  // Get UMKM data for location matching
+  const [umkmProfile] = await db.select().from(umkm).where(eq(umkm.id, need.umkmId)).limit(1);
+
+  // Calculate match score
+  const studentSkills = studentProfile.skills
+    ? Array.isArray(studentProfile.skills)
+      ? studentProfile.skills
+      : JSON.parse(studentProfile.skills)
+    : [];
+  const requiredSkills = need.requiredSkills
+    ? Array.isArray(need.requiredSkills)
+      ? need.requiredSkills
+      : JSON.parse(need.requiredSkills)
+    : [];
+
+  let skillMatch = 50;
+  if (requiredSkills.length > 0 && studentSkills.length > 0) {
+    const matchedSkills = studentSkills.filter((s) =>
+      requiredSkills.some(
+        (rs) =>
+          rs.toLowerCase().includes(s.toLowerCase()) ||
+          s.toLowerCase().includes(rs.toLowerCase()),
+      ),
+    );
+    skillMatch = Math.min(
+      100,
+      Math.round((matchedSkills.length / requiredSkills.length) * 100),
+    );
+  }
+
+  let majorMatch = 50;
+  if (need.requiredMajor && studentProfile.major) {
+    majorMatch = need.requiredMajor === studentProfile.major ? 100 : 30;
+  }
+
+  let locationMatch = 50;
+  if (umkmProfile?.city && studentProfile.city) {
+    locationMatch = umkmProfile.city === studentProfile.city ? 100 : 40;
+  }
+
+  const matchScore = Math.round(
+    skillMatch * 0.5 + majorMatch * 0.3 + locationMatch * 0.2,
+  );
+
+  const matchDetails = {
+    skillMatch,
+    majorMatch,
+    location: locationMatch,
+  };
+
+  const id = generateId();
+
+  await db.insert(matchmaking).values({
+    id,
+    studentId: studentProfile.id,
+    needId,
+    matchScore,
+    matchDetails,
+    status: "pending",
+    studentResponse: "accepted",
+  });
+
+  const [created] = await db.select().from(matchmaking).where(eq(matchmaking.id, id)).limit(1);
+  res.status(201).json(created);
+});
+
 export const createMatch = asyncHandler(async (req, res) => {
   const { studentId, needId, matchScore, matchDetails } = req.body;
 

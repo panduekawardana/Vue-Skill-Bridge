@@ -15,7 +15,15 @@
     "format": "oxfmt src/"
   },
   "dependencies": {
+    "@lucide/vue": "^1.21.0",
+    "@tailwindcss/vite": "^4.3.1",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "gsap": "^3.15.0",
+    "lucide-vue-next": "^1.0.0",
     "pinia": "^3.0.4",
+    "tailwind-merge": "^3.6.0",
+    "tailwindcss": "^4.3.1",
     "vue": "^3.5.32",
     "vue-router": "^5.0.4"
   },

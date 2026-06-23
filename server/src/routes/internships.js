@@ -10,7 +10,7 @@ export const internshipRouter = Router();
 internshipRouter.get("/needs", getNeeds);
 internshipRouter.get("/needs/:id", getNeed);
 internshipRouter.post("/needs", authenticate, authorize("umkm", "admin"), createNeed);
-internshipRouter.put("/needs/:id", authenticate, updateNeed);
+internshipRouter.put("/needs/:id", authenticate, authorize("umkm", "admin"), updateNeed);
 internshipRouter.delete("/needs/:id", authenticate, authorize("admin"), deleteNeed);
 internshipRouter.patch("/needs/:id/status", authenticate, authorize("umkm", "admin"), updateNeedStatus);
 

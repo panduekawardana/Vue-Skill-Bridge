@@ -12,3 +12,4 @@ export { internships } from "./internships.js";
 export { evaluations } from "./evaluations.js";
 export { certificates } from "./certificates.js";
 export { notifications } from "./notifications.js";
+export { supportTickets } from "./supportTickets.js";

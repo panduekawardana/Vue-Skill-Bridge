@@ -170,6 +170,13 @@ export const updateNeedStatus = asyncHandler(async (req, res) => {
   const [need] = await db.select().from(internshipNeeds).where(eq(internshipNeeds.id, req.params.id)).limit(1);
   if (!need) throw new AppError("Internship need not found", 404);
 
+  if (req.user.role === "umkm") {
+    const [umkmProfile] = await db.select().from(umkm).where(eq(umkm.userId, req.user.userId)).limit(1);
+    if (umkmProfile?.id !== need.umkmId) {
+      throw new AppError("Forbidden. You can only update your own needs.", 403);
+    }
+  }
+
   await db.update(internshipNeeds).set({ status }).where(eq(internshipNeeds.id, req.params.id));
   res.json({ message: `Status updated to ${status}` });
 });
@@ -256,6 +263,18 @@ export const updateInternshipStatus = asyncHandler(async (req, res) => {
   const [internship] = await db.select().from(internships).where(eq(internships.id, req.params.id)).limit(1);
   if (!internship) throw new AppError("Internship not found", 404);
 
+  if (req.user.role !== "admin") {
+    const [studentProfile] = await db.select().from(students).where(eq(students.userId, req.user.userId)).limit(1);
+    const [umkmProfile] = await db.select().from(umkm).where(eq(umkm.userId, req.user.userId)).limit(1);
+
+    const isStudentOwner = studentProfile?.id === internship.studentId;
+    const isUmkmOwner = umkmProfile?.id === internship.umkmId;
+
+    if (!isStudentOwner && !isUmkmOwner) {
+      throw new AppError("Forbidden. You are not part of this internship.", 403);
+    }
+  }
+
   const updateData = { status };
 
   if (status === "cancelled") {
@@ -274,7 +293,7 @@ export const updateInternshipStatus = asyncHandler(async (req, res) => {
   await db.update(internships).set(updateData).where(eq(internships.id, req.params.id));
 
   if (status === "completed") {
-    const certNumber = `SB-${new Date().getFullYear()}-${String(Math.floor(Math.random() * 99999)).padStart(5, "0")}`;
+    const certNumber = `SB-${new Date().getFullYear()}-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
     await db.insert(certificates).values({
       id: generateId(),
       studentId: internship.studentId,
