@@ -8,6 +8,7 @@ import { umkm } from "../db/schema/umkm.js";
 import { users } from "../db/schema/users.js";
 import { internships } from "../db/schema/internships.js";
 import { skillTestResults } from "../db/schema/skillTestResults.js";
+import { admins } from "../db/schema/admins.js";
 import { AppError } from "../utils/AppError.js";
 import { asyncHandler } from "../middleware/errorHandler.js";
 import { createNotification } from "./notificationController.js";
@@ -241,8 +242,60 @@ export const respondToMatch = asyncHandler(async (req, res) => {
 
   const [match] = await db.select().from(matchmaking).where(eq(matchmaking.id, req.params.id)).limit(1);
   if (!match) throw new AppError("Match not found", 404);
+
+  // ─── ADMIN OVERRIDE (bypasses status check) ─────────────
+  if (req.user.role === "admin") {
+    const [adminRecord] = await db.select().from(admins).where(eq(admins.userId, req.user.userId)).limit(1);
+    const canOverride = adminRecord?.permissions?.includes("match:override");
+
+    if (!canOverride) throw new AppError("Forbidden. No match:override permission.", 403);
+
+    if (response === "rejected") {
+      await db.update(matchmaking).set({
+        status: "rejected",
+        studentResponse: "rejected",
+        umkmResponse: "rejected",
+        respondedAt: new Date(),
+      }).where(eq(matchmaking.id, match.id));
+    } else {
+      await db.update(matchmaking).set({
+        status: "accepted",
+        studentResponse: "accepted",
+        umkmResponse: "accepted",
+        matchedAt: new Date(),
+        respondedAt: new Date(),
+      }).where(eq(matchmaking.id, match.id));
+
+      await createInternshipFromMatch(match);
+    }
+
+    const [updated] = await db.select().from(matchmaking).where(eq(matchmaking.id, match.id)).limit(1);
+
+    // Notify both parties
+    try {
+      const [need] = await db.select().from(internshipNeeds).where(eq(internshipNeeds.id, match.needId)).limit(1);
+      const [umkmProfile] = await db.select().from(umkm).where(eq(umkm.id, need?.umkmId)).limit(1);
+      const [studentUser] = await db.select({ userId: users.id }).from(users).innerJoin(students, eq(users.id, students.userId)).where(eq(students.id, match.studentId)).limit(1);
+
+      const verb = response === "accepted" ? "menerima" : "menolak";
+      const title = `Lamaran ${response === "accepted" ? "Diterima" : "Ditolak"} (Admin)`;
+      const body = `Admin telah ${verb} lamaran magang atas nama Anda.`;
+
+      if (studentUser) {
+        await createNotification({ userId: studentUser.userId, type: "match", title, body, referenceId: match.id });
+      }
+      if (umkmProfile) {
+        await createNotification({ userId: umkmProfile.userId, type: "match", title, body, referenceId: match.id });
+      }
+    } catch (_err) { /* non-blocking */ }
+
+    return res.json(updated);
+  }
+
+  // ─── NON-ADMIN: must be pending ───────────────────────────
   if (match.status !== "pending") throw new AppError("Match already responded", 400);
 
+  // ─── STUDENT RESPONSE ────────────────────────────────────
   const [studentProfile] = await db.select().from(students).where(eq(students.userId, req.user.userId)).limit(1);
 
   if (req.user.role === "student" && studentProfile?.id === match.studentId) {
@@ -259,6 +312,7 @@ export const respondToMatch = asyncHandler(async (req, res) => {
       await createInternshipFromMatch(match);
     }
   } else {
+    // ─── UMKM RESPONSE ──────────────────────────────────────
     const [umkmProfile] = await db.select().from(umkm).where(eq(umkm.userId, req.user.userId)).limit(1);
     const [need] = await db.select().from(internshipNeeds).where(eq(internshipNeeds.id, match.needId)).limit(1);
 

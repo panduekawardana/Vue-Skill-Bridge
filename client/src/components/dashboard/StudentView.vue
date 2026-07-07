@@ -6,7 +6,7 @@ import Badge from "@/components/ui/Badge.vue"
 import Button from "@/components/ui/Button.vue"
 import { useRouter } from "vue-router"
 import { api } from "@/lib/api"
-import { ClipboardCheck, Zap, Medal, ArrowRight, Clock, FileText, Briefcase, Search } from "@lucide/vue"
+import { ClipboardCheck, Zap, Medal, ArrowRight, Clock, FileText, Briefcase, Search, Star } from "@lucide/vue"
 
 const auth = useAuthStore()
 const router = useRouter()
@@ -65,7 +65,7 @@ onMounted(load)
     </div>
 
     <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-      <Card class="p-5 flex items-center gap-4 cursor-pointer hover:bg-secondary/20 transition-colors" @click="router.push('/skill-test')">
+      <Card class="p-5 flex items-center gap-4 cursor-pointer hover:bg-secondary/20 transition-colors" @click="router.push('/skill-test/results')">
         <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-100 text-blue-600">
           <ClipboardCheck class="h-5 w-5" />
         </div>
@@ -141,7 +141,12 @@ onMounted(load)
             <p class="text-sm font-medium">{{ m.businessName }}</p>
             <p class="text-xs text-muted-foreground">{{ m.startDate?.slice(0, 10) }}</p>
           </div>
-          <Badge :variant="statusColor[m.status] || 'outline'" class="text-[10px]">{{ m.status }}</Badge>
+          <div class="flex items-center gap-2">
+            <Button v-if="m.status === 'completed'" size="sm" variant="ghost" @click.stop="router.push(`/internships/${m.id}/evaluate`)">
+              <Star class="h-4 w-4 mr-1" />Beri Ulasan
+            </Button>
+            <Badge :variant="statusColor[m.status] || 'outline'" class="text-[10px]">{{ m.status }}</Badge>
+          </div>
         </div>
       </div>
       <div v-else class="text-center py-6 text-muted-foreground">

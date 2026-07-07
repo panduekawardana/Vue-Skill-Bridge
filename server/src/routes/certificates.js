@@ -5,6 +5,6 @@ import { getCertificates, getCertificate, downloadCertificate, verifyCertificate
 export const certificateRouter = Router();
 
 certificateRouter.get("/", authenticate, getCertificates);
+certificateRouter.get("/verify/:certNumber", verifyCertificate); // must be before /:id
 certificateRouter.get("/:id", authenticate, getCertificate);
 certificateRouter.get("/:id/download", authenticate, downloadCertificate);
-certificateRouter.get("/verify/:certNumber", verifyCertificate);

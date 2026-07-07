@@ -3,178 +3,123 @@ import { ref, onMounted } from "vue"
 import { useRouter } from "vue-router"
 import { gsap } from "gsap"
 import Button from "@/components/ui/Button.vue"
-import Badge from "@/components/ui/Badge.vue"
-import { ArrowRight, Sparkles, Users, Building2, Star } from "@lucide/vue"
+import { ArrowRight, Zap, Shield, Users } from "@lucide/vue"
 
 const router = useRouter()
 
 const badgeRef = ref(null)
-const linesRef = ref(null)
+const headlineRef = ref(null)
 const descRef = ref(null)
 const actionsRef = ref(null)
-const statsRef = ref(null)
 const visualRef = ref(null)
-const orbRef = ref(null)
-const floatingCardsRef = ref([])
+const statItems = ref([])
 
 onMounted(() => {
   const tl = gsap.timeline({ defaults: { ease: "power3.out" } })
 
-  tl.fromTo(badgeRef.value, { y: 24, opacity: 0 }, { y: 0, opacity: 1, duration: 0.5 })
+  tl.fromTo(badgeRef.value, { y: 10, opacity: 0 }, { y: 0, opacity: 1, duration: 0.4 })
 
-  if (linesRef.value?.children) {
-    Array.from(linesRef.value.children).forEach((el) => {
-      tl.fromTo(el, { y: 40, opacity: 0 }, { y: 0, opacity: 1, duration: 0.6 }, "-=0.25")
+  if (headlineRef.value?.children) {
+    Array.from(headlineRef.value.children).forEach((el) => {
+      tl.fromTo(el, { y: 30, opacity: 0 }, { y: 0, opacity: 1, duration: 0.5 }, "-=0.1")
     })
   }
 
-  tl.fromTo(descRef.value, { y: 24, opacity: 0 }, { y: 0, opacity: 1, duration: 0.5 }, "-=0.2")
-    .fromTo(actionsRef.value, { y: 24, opacity: 0 }, { y: 0, opacity: 1, duration: 0.5 }, "-=0.15")
-    .fromTo(statsRef.value?.children ?? [], { y: 16, opacity: 0 }, { y: 0, opacity: 1, duration: 0.4, stagger: 0.08 }, "-=0.1")
+  tl.fromTo(descRef.value, { y: 20, opacity: 0 }, { y: 0, opacity: 1, duration: 0.4 }, "-=0.15")
+    .fromTo(actionsRef.value, { y: 20, opacity: 0 }, { y: 0, opacity: 1, duration: 0.4 }, "-=0.1")
+    .fromTo(visualRef.value, { y: 30, opacity: 0, scale: 0.98 }, { y: 0, opacity: 1, scale: 1, duration: 0.6, ease: "power2.out" }, "-=0.2")
 
-  if (visualRef.value) {
-    tl.fromTo(visualRef.value, { scale: 0.8, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.8, ease: "power2.out" }, "-=0.1")
-  }
-
-  floatingCardsRef.value.forEach((el) => {
-    tl.fromTo(el, { y: 30, opacity: 0 }, { y: 0, opacity: 1, duration: 0.5, ease: "power2.out" }, "-=0.3")
-  })
-
-  if (orbRef.value) {
-    gsap.to(orbRef.value, {
-      scale: 1.05,
-      duration: 3,
-      repeat: -1,
-      yoyo: true,
-      ease: "sine.inOut",
-    })
+  if (statItems.value.length) {
+    tl.fromTo(statItems.value, { y: 15, opacity: 0 }, { y: 0, opacity: 1, duration: 0.3, stagger: 0.06 }, "-=0.1")
   }
 })
 </script>
 
 <template>
-  <section class="relative pt-28 pb-20 md:pt-36 md:pb-28 overflow-hidden min-h-screen flex items-center">
-    <div class="absolute inset-0 -z-10 pointer-events-none">
-      <div class="absolute top-[-10%] right-[-5%] w-[800px] h-[800px] bg-gradient-to-br from-primary/8 via-accent/5 to-transparent rounded-full blur-3xl" />
-      <div class="absolute bottom-[-10%] left-[-5%] w-[600px] h-[600px] bg-gradient-to-tr from-accent/8 via-primary/5 to-transparent rounded-full blur-3xl" />
-      <div class="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-primary/[0.02] via-transparent to-transparent" />
-    </div>
+  <section class="relative pt-32 pb-20 md:pt-40 md:pb-28 overflow-hidden">
+    <div class="absolute inset-0 bg-gradient-to-b from-accent/[0.02] via-transparent to-transparent pointer-events-none" />
 
-    <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 w-full">
-      <div class="grid lg:grid-cols-2 gap-12 lg:gap-16 items-center">
-        <div class="flex flex-col max-w-xl">
-          <div ref="badgeRef" class="mb-6">
-            <Badge variant="secondary" class="inline-flex items-center gap-1.5 text-xs tracking-wide uppercase font-semibold px-3 py-1.5">
-              <Sparkles class="h-3 w-3 text-primary" />
-              Platform Matchmaking Magang Mikro
-            </Badge>
+    <div class="mx-auto max-w-7xl px-6 lg:px-8">
+      <div class="grid lg:grid-cols-2 gap-16 lg:gap-20 items-center">
+        <div class="max-w-xl">
+          <div
+            ref="badgeRef"
+            class="inline-flex items-center gap-1.5 bg-accent/8 text-accent text-xs font-semibold px-3 py-1.5 rounded-full border border-accent/15 mb-6"
+          >
+            <Zap class="h-3.5 w-3.5" />
+            Platform Matchmaking #1 di Indonesia
           </div>
 
-          <h1 ref="linesRef" class="text-3xl sm:text-4xl lg:text-5xl xl:text-6xl font-bold tracking-tight leading-[1.1]">
-            <span class="block">Jembatani Bakat SMK</span>
-            <span class="block mt-1 bg-gradient-to-r from-primary via-accent to-accent bg-clip-text text-transparent">
-              dengan Kebutuhan UMKM
-            </span>
+          <h1 ref="headlineRef" class="text-4xl sm:text-5xl lg:text-6xl/tight font-bold tracking-tight">
+            <span class="block">Jembatani Bakat</span>
+            <span class="block text-accent">SMK dengan Peluang</span>
+            <span class="block">UMKM Lokal</span>
           </h1>
 
-          <div ref="descRef" class="mt-6">
-            <p class="text-base sm:text-lg text-muted-foreground/90 leading-relaxed max-w-lg">
-              Platform berbasis kompetensi yang mempertemukan lulusan SMK dengan UMKM lokal
-              untuk magang mikro 2 minggu. Terverifikasi, terukur, dan saling menguntungkan.
-            </p>
-          </div>
+          <p ref="descRef" class="mt-5 text-base sm:text-lg text-muted-foreground/80 leading-relaxed max-w-md">
+            Platform matchmaking berbasis kompetensi yang mempertemukan lulusan SMK terverifikasi dengan UMKM lokal untuk magang mikro 14 hari.
+          </p>
 
           <div ref="actionsRef" class="mt-8 flex flex-col sm:flex-row gap-3">
-            <Button size="lg" class="group shadow-lg shadow-primary/20 hover:shadow-xl hover:shadow-primary/25 transition-all duration-300" @click="router.push('/register')">
-              Daftar Sekarang
-              <ArrowRight class="ml-2 h-4 w-4 transition-transform duration-300 group-hover:translate-x-0.5" />
+            <Button size="lg" class="shadow-lg shadow-accent/20 hover:shadow-xl hover:shadow-accent/25 transition-all duration-300" @click="router.push('/register')">
+              Mulai Gratis
+              <ArrowRight class="ml-2 h-4 w-4" />
             </Button>
-            <Button variant="outline" size="lg" class="hover:border-primary/30 transition-all duration-300" @click="router.push('/login')">
-              Sudah Punya Akun?
+            <Button variant="outline" size="lg" @click="router.push('/login')">
+              Lihat Demo
             </Button>
           </div>
 
-          <div ref="statsRef" class="mt-12 flex gap-4 sm:gap-6">
-            <div class="flex items-center gap-3 rounded-xl border border-border/50 bg-background/60 backdrop-blur-sm px-4 py-3 shadow-xs">
-              <div class="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/8 text-primary shrink-0">
-                <Users class="h-4 w-4" />
-              </div>
-              <div>
-                <p class="text-sm font-bold text-foreground">2 Minggu</p>
-                <p class="text-[11px] text-muted-foreground">Durasi Magang</p>
-              </div>
+          <div ref="statItems" class="mt-10 flex items-center gap-8">
+            <div>
+              <p class="text-2xl font-bold">94%</p>
+              <p class="text-xs text-muted-foreground">Match Rate</p>
             </div>
-            <div class="flex items-center gap-3 rounded-xl border border-border/50 bg-background/60 backdrop-blur-sm px-4 py-3 shadow-xs">
-              <div class="flex h-9 w-9 items-center justify-center rounded-lg bg-accent/8 text-accent shrink-0">
-                <Star class="h-4 w-4" />
-              </div>
-              <div>
-                <p class="text-sm font-bold text-foreground">100%</p>
-                <p class="text-[11px] text-muted-foreground">Berbasis Skill</p>
-              </div>
+            <div class="w-px h-8 bg-border" />
+            <div>
+              <p class="text-2xl font-bold">500+</p>
+              <p class="text-xs text-muted-foreground">Penempatan</p>
             </div>
-            <div class="flex items-center gap-3 rounded-xl border border-border/50 bg-background/60 backdrop-blur-sm px-4 py-3 shadow-xs">
-              <div class="flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-500/8 text-emerald-500 shrink-0">
-                <Building2 class="h-4 w-4" />
-              </div>
-              <div>
-                <p class="text-sm font-bold text-foreground">Gratis</p>
-                <p class="text-[11px] text-muted-foreground">Tanpa Biaya</p>
-              </div>
+            <div class="w-px h-8 bg-border" />
+            <div>
+              <p class="text-2xl font-bold">100%</p>
+              <p class="text-xs text-muted-foreground">Gratis</p>
             </div>
           </div>
         </div>
 
-        <div ref="visualRef" class="relative hidden lg:flex items-center justify-center">
-          <div ref="orbRef" class="absolute w-[500px] h-[500px] bg-gradient-to-br from-primary/10 via-accent/10 to-transparent rounded-full blur-2xl" />
+        <div ref="visualRef" class="relative hidden lg:block">
+          <div class="relative rounded-2xl overflow-hidden shadow-2xl shadow-black/5 border border-border">
+            <img
+              src="https://images.unsplash.com/photo-1524178232363-1fb2b075b655?w=700&h=550&fit=crop"
+              alt="Kolaborasi siswa SMK dan UMKM"
+              class="w-full h-[480px] object-cover"
+              loading="lazy"
+            />
+            <div class="absolute inset-0 bg-gradient-to-tr from-accent/5 via-transparent to-transparent" />
+          </div>
 
-          <div class="relative flex flex-col items-center gap-4">
-            <div ref="floatingCardsRef" class="relative w-72 rounded-2xl border border-border/60 bg-background/70 backdrop-blur-md p-5 shadow-lg shadow-primary/5">
-              <div class="flex items-center gap-3 mb-4">
-                <div class="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-primary to-accent text-white text-xs font-bold shadow-md">
-                  SMK
-                </div>
-                <div class="flex-1 min-w-0">
-                  <p class="text-sm font-semibold truncate">Andi Pratama</p>
-                  <p class="text-xs text-muted-foreground">Rekayasa Perangkat Lunak</p>
-                </div>
-                <div class="flex h-6 items-center rounded-full bg-emerald-500/10 px-2 text-[10px] font-medium text-emerald-600">
-                  Skor 94
-                </div>
+          <div class="absolute -bottom-4 -right-4 rounded-xl border border-border bg-white px-5 py-3 shadow-xl shadow-black/5">
+            <div class="flex items-center gap-3">
+              <div class="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-50">
+                <Shield class="h-4 w-4 text-emerald-600" />
               </div>
-              <div class="h-1.5 w-full rounded-full bg-secondary overflow-hidden">
-                <div class="h-full w-[94%] rounded-full bg-gradient-to-r from-primary to-accent" />
-              </div>
-              <div class="flex items-center justify-between mt-4 text-xs text-muted-foreground">
-                <span>Skill Match</span>
-                <span class="font-semibold text-foreground">Sangat Tinggi</span>
+              <div>
+                <p class="text-sm font-semibold">Kompetensi Terverifikasi</p>
+                <p class="text-xs text-muted-foreground">Standar BNSP</p>
               </div>
             </div>
+          </div>
 
-            <div ref="floatingCardsRef" class="relative w-72 rounded-2xl border border-border/60 bg-background/70 backdrop-blur-md p-5 shadow-lg shadow-accent/5 -ml-16">
-              <div class="flex items-center gap-3">
-                <div class="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-accent to-primary text-white text-xs font-bold shadow-md">
-                  UMKM
-                </div>
-                <div class="flex-1 min-w-0">
-                  <p class="text-sm font-semibold truncate">Warung Makan Sejahtera</p>
-                  <p class="text-xs text-muted-foreground">Membutuhkan: Admin Digital</p>
-                </div>
+          <div class="absolute -top-4 -left-4 rounded-xl border border-border bg-white px-5 py-3 shadow-xl shadow-black/5">
+            <div class="flex items-center gap-3">
+              <div class="flex h-8 w-8 items-center justify-center rounded-full bg-blue-50">
+                <Users class="h-4 w-4 text-blue-600" />
               </div>
-              <div class="mt-3 flex gap-1.5 flex-wrap">
-                <span class="rounded-full bg-secondary text-secondary-foreground px-2.5 py-0.5 text-[10px] font-medium">Manajemen Data</span>
-                <span class="rounded-full bg-secondary text-secondary-foreground px-2.5 py-0.5 text-[10px] font-medium">Media Sosial</span>
-                <span class="rounded-full bg-secondary text-secondary-foreground px-2.5 py-0.5 text-[10px] font-medium">Excel</span>
+              <div>
+                <p class="text-sm font-semibold">50+ UMKM Aktif</p>
+                <p class="text-xs text-muted-foreground">Tersebar di 15 kota</p>
               </div>
-            </div>
-
-            <div class="flex items-center gap-1.5 text-[11px] text-muted-foreground/60 mt-2">
-              <div class="h-px w-12 bg-border" />
-              <span class="inline-flex items-center gap-1">
-                <Sparkles class="h-3 w-3 text-primary/60" />
-                Matchmaking otomatis berbasis AI
-              </span>
-              <div class="h-px w-12 bg-border" />
             </div>
           </div>
         </div>

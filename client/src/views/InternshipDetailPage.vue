@@ -210,7 +210,9 @@ onMounted(load)
         <div v-else class="bg-secondary/20 rounded-lg p-3 mb-2">
           <div class="flex items-center gap-1 mb-1">
             <span class="text-xs font-medium">Ulasan Anda:</span>
-            <span class="text-amber-500 text-xs">{{ "★".repeat(myEvaluation.rating) }}{{ "☆".repeat(5 - myEvaluation.rating) }}</span>
+            <span class="flex">
+              <Star v-for="i in 5" :key="i" class="h-3.5 w-3.5" :class="i <= myEvaluation.rating ? 'text-amber-400 fill-amber-400' : 'text-muted-foreground/30'" />
+            </span>
           </div>
           <p v-if="myEvaluation.reviewText" class="text-xs text-muted-foreground">{{ myEvaluation.reviewText }}</p>
         </div>
@@ -218,7 +220,9 @@ onMounted(load)
         <div v-if="otherEvaluation" class="bg-secondary/20 rounded-lg p-3">
           <div class="flex items-center gap-1 mb-1">
             <span class="text-xs font-medium">Ulasan {{ otherEvaluation.evaluatorRole === "umkm" ? "UMKM" : "Siswa" }}:</span>
-            <span class="text-amber-500 text-xs">{{ "★".repeat(otherEvaluation.rating) }}{{ "☆".repeat(5 - otherEvaluation.rating) }}</span>
+            <span class="flex">
+              <Star v-for="i in 5" :key="i" class="h-3.5 w-3.5" :class="i <= otherEvaluation.rating ? 'text-amber-400 fill-amber-400' : 'text-muted-foreground/30'" />
+            </span>
           </div>
           <p v-if="otherEvaluation.reviewText" class="text-xs text-muted-foreground">{{ otherEvaluation.reviewText }}</p>
         </div>

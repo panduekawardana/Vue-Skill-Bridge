@@ -1,5 +1,5 @@
 import crypto from "crypto";
-import { eq, sql, count, and } from "drizzle-orm";
+import { eq, sql, count, and, gte, lte } from "drizzle-orm";
 import { db } from "../config/database.js";
 import { users } from "../db/schema/users.js";
 import { students } from "../db/schema/students.js";
@@ -9,6 +9,7 @@ import { internships } from "../db/schema/internships.js";
 import { matchmaking } from "../db/schema/matchmaking.js";
 import { AppError } from "../utils/AppError.js";
 import { asyncHandler } from "../middleware/errorHandler.js";
+import { internshipNeeds } from "../db/schema/internshipNeeds.js";
 
 function generateId() {
   return crypto.randomUUID();
@@ -40,6 +41,64 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
     pendingMatches: pendingMatches.count,
     completedInternships: completedInternships.count,
     unverifiedUmkm: unverifiedUmkm.count,
+  });
+});
+
+// ─── CHART DATA ────────────────────────────────────────────────
+
+function getPeriodFilter(period) {
+  const now = new Date();
+  switch (period) {
+    case "7d": return new Date(now.getTime() - 7 * 86400000);
+    case "30d": return new Date(now.getTime() - 30 * 86400000);
+    case "90d": return new Date(now.getTime() - 90 * 86400000);
+    default: return null;
+  }
+}
+
+function dateTrunc(dateExpr, period) {
+  if (period === "7d" || period === "30d") return sql`DATE(${dateExpr})`;
+  return sql`DATE_FORMAT(${dateExpr}, '%Y-%m')`;
+}
+
+export const getChartData = asyncHandler(async (req, res) => {
+  const period = req.query.period || "30d";
+  const since = getPeriodFilter(period);
+  const trunc = dateTrunc(users.createdAt, period);
+
+  // Registration timeline (students + UMKM)
+  const regConditions = [];
+  if (since) regConditions.push(gte(users.createdAt, since));
+  const registrations = await db
+    .select({
+      date: trunc,
+      role: users.role,
+      count: count(),
+    })
+    .from(users)
+    .where(and(...regConditions))
+    .groupBy(trunc, users.role)
+    .orderBy(trunc);
+
+  // Status distributions (run in parallel)
+  const [intStatuses, matchStatuses, needStatuses] = await Promise.all([
+    db.select({ status: internships.status, count: count() })
+      .from(internships)
+      .groupBy(internships.status),
+    db.select({ status: matchmaking.status, count: count() })
+      .from(matchmaking)
+      .groupBy(matchmaking.status),
+    db.select({ status: internshipNeeds.status, count: count() })
+      .from(internshipNeeds)
+      .groupBy(internshipNeeds.status),
+  ]);
+
+  res.json({
+    period,
+    registrations,
+    internshipStatuses: intStatuses,
+    matchStatuses,
+    needStatuses,
   });
 });
 

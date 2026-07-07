@@ -8,6 +8,7 @@ import AdminDashboardPage from '@/views/AdminDashboardPage.vue'
 import InternshipNeedNew from '@/views/InternshipNeedNew.vue'
 import InternshipNeedsBrowse from '@/views/InternshipNeedsBrowse.vue'
 import SkillTestPage from '@/views/SkillTestPage.vue'
+import TestResultsPage from '@/views/TestResultsPage.vue'
 import MatchmakingPage from '@/views/MatchmakingPage.vue'
 import InternshipDetailPage from '@/views/InternshipDetailPage.vue'
 import EvaluationPage from '@/views/EvaluationPage.vue'
@@ -35,6 +36,8 @@ const router = createRouter({
     { path: '/internship-needs/browse', name: 'internship-needs-browse', component: InternshipNeedsBrowse, meta: { auth: true } },
     { path: '/skill-test', name: 'skill-test', component: SkillTestPage, meta: { auth: true } },
     { path: '/skill-test/attempt/:id', name: 'skill-test-attempt', component: SkillTestPage, meta: { auth: true } },
+    { path: '/skill-test/results', name: 'skill-test-results', component: TestResultsPage, meta: { auth: true } },
+    { path: '/internship-needs/:id/edit', name: 'internship-need-edit', component: InternshipNeedNew, meta: { auth: true } },
     { path: '/matchmaking', name: 'matchmaking', component: MatchmakingPage, meta: { auth: true } },
     { path: '/internships/:id', name: 'internship-detail', component: InternshipDetailPage, meta: { auth: true } },
     { path: '/internships/:id/evaluate', name: 'internship-evaluate', component: EvaluationPage, meta: { auth: true } },

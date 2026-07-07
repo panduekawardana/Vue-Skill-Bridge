@@ -2,6 +2,7 @@ import { Router } from "express";
 import { authenticate, authorize } from "../middleware/auth.js";
 import {
   getDashboardStats,
+  getChartData,
   getUsers,
   getUser,
   updateUser,
@@ -22,6 +23,7 @@ export const adminRouter = Router();
 adminRouter.use(authenticate, authorize("admin"));
 
 adminRouter.get("/dashboard", getDashboardStats);
+adminRouter.get("/charts", getChartData);
 adminRouter.get("/users", getUsers);
 adminRouter.get("/users/:id", getUser);
 adminRouter.patch("/users/:id", updateUser);
