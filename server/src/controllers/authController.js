@@ -9,6 +9,7 @@ import { umkm } from "../db/schema/umkm.js";
 import { admins } from "../db/schema/admins.js";
 import { AppError } from "../utils/AppError.js";
 import { asyncHandler } from "../middleware/errorHandler.js";
+import { createNotification } from "./notificationController.js";
 
 function generateId() {
   return crypto.randomUUID();
@@ -96,6 +97,22 @@ export const register = asyncHandler(async (req, res) => {
       roleLevel: profileData.roleLevel || "support",
       permissions: JSON.parse(JSON.stringify(profileData.permissions || defaultPermissions)),
     });
+  }
+
+  try {
+    const welcomeMessages = {
+      student: "Selamat datang di Skill Bridge! Lengkapi profil dan ikuti skill test untuk mulai mencari magang.",
+      umkm: "Selamat datang di Skill Bridge! Akun Anda perlu diverifikasi sebelum dapat memasang kebutuhan magang.",
+      admin: "Selamat datang di panel admin Skill Bridge.",
+    };
+    await createNotification({
+      userId: id,
+      type: "system",
+      title: "Selamat Datang di Skill Bridge!",
+      body: welcomeMessages[role] || "Selamat datang di Skill Bridge!",
+    });
+  } catch (_err) {
+    // non-blocking
   }
 
   const token = signToken(createdUser);

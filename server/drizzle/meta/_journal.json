@@ -8,6 +8,13 @@
       "when": 1782176603244,
       "tag": "0000_overconfident_alex_wilder",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "5",
+      "when": 1782192869838,
+      "tag": "0001_regular_vance_astro",
+      "breakpoints": true
     }
   ]
 }

@@ -86,9 +86,15 @@ export const updateStudent = asyncHandler(async (req, res) => {
     }
   }
 
-  if (Object.keys(updateData).length === 0) throw new AppError("No valid fields to update", 400);
+  if (Object.keys(updateData).length === 0 && !req.body.fullName) throw new AppError("No valid fields to update", 400);
 
-  await db.update(students).set(updateData).where(eq(students.id, studentId));
+  if (Object.keys(updateData).length > 0) {
+    await db.update(students).set(updateData).where(eq(students.id, studentId));
+  }
+
+  if (req.body.fullName) {
+    await db.update(users).set({ fullName: req.body.fullName }).where(eq(users.id, profile.userId));
+  }
 
   const [updated] = await db.select().from(students).where(eq(students.id, studentId)).limit(1);
   res.json(updated);
@@ -177,9 +183,15 @@ export const updateUmkm = asyncHandler(async (req, res) => {
     if (req.body[key] !== undefined) updateData[key] = req.body[key];
   }
 
-  if (Object.keys(updateData).length === 0) throw new AppError("No valid fields to update", 400);
+  if (Object.keys(updateData).length === 0 && !req.body.fullName) throw new AppError("No valid fields to update", 400);
 
-  await db.update(umkm).set(updateData).where(eq(umkm.id, umkmId));
+  if (Object.keys(updateData).length > 0) {
+    await db.update(umkm).set(updateData).where(eq(umkm.id, umkmId));
+  }
+
+  if (req.body.fullName) {
+    await db.update(users).set({ fullName: req.body.fullName }).where(eq(users.id, profile.userId));
+  }
 
   const [updated] = await db.select().from(umkm).where(eq(umkm.id, umkmId)).limit(1);
   res.json(updated);
@@ -203,12 +215,14 @@ export const verifyUmkm = asyncHandler(async (req, res) => {
 
   const isVerified = req.body.isVerified !== false;
 
+  const [adminRecord] = await db.select().from(admins).where(eq(admins.userId, req.user.userId)).limit(1);
+
   await db
     .update(umkm)
     .set({
       isVerified,
       verifiedAt: isVerified ? new Date() : null,
-      verifiedBy: isVerified ? req.user.userId : null,
+      verifiedBy: isVerified ? (adminRecord?.id || null) : null,
     })
     .where(eq(umkm.id, umkmId));
 

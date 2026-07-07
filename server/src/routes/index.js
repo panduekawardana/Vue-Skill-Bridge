@@ -7,6 +7,7 @@ import { matchmakingRouter } from "./matchmakingRoutes.js";
 import { evaluationRouter } from "./evaluations.js";
 import { certificateRouter } from "./certificates.js";
 import { notificationRouter } from "./notifications.js";
+import { adminRouter } from "./admin.js";
 
 export const router = Router();
 
@@ -18,6 +19,7 @@ router.use("/matchmaking", matchmakingRouter);
 router.use("/evaluations", evaluationRouter);
 router.use("/certificates", certificateRouter);
 router.use("/notifications", notificationRouter);
+router.use("/admin", adminRouter);
 
 router.get("/health", (_req, res) => {
   res.json({ status: "ok" });

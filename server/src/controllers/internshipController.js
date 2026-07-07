@@ -1,5 +1,5 @@
 import crypto from "crypto";
-import { eq, and, desc, sql } from "drizzle-orm";
+import { eq, and, or, desc, sql, gte, lte } from "drizzle-orm";
 import { db } from "../config/database.js";
 import { internshipNeeds } from "../db/schema/internshipNeeds.js";
 import { umkm } from "../db/schema/umkm.js";
@@ -10,6 +10,8 @@ import { users } from "../db/schema/users.js";
 import { certificates } from "../db/schema/certificates.js";
 import { AppError } from "../utils/AppError.js";
 import { asyncHandler } from "../middleware/errorHandler.js";
+import { generateCertificatePdf } from "./certificateController.js";
+import { createNotification } from "./notificationController.js";
 
 function generateId() {
   return crypto.randomUUID();
@@ -170,6 +172,13 @@ export const updateNeedStatus = asyncHandler(async (req, res) => {
   const [need] = await db.select().from(internshipNeeds).where(eq(internshipNeeds.id, req.params.id)).limit(1);
   if (!need) throw new AppError("Internship need not found", 404);
 
+  if (req.user.role === "umkm") {
+    const [umkmProfile] = await db.select().from(umkm).where(eq(umkm.userId, req.user.userId)).limit(1);
+    if (umkmProfile?.id !== need.umkmId) {
+      throw new AppError("Forbidden. You can only update your own needs.", 403);
+    }
+  }
+
   await db.update(internshipNeeds).set({ status }).where(eq(internshipNeeds.id, req.params.id));
   res.json({ message: `Status updated to ${status}` });
 });
@@ -256,32 +265,135 @@ export const updateInternshipStatus = asyncHandler(async (req, res) => {
   const [internship] = await db.select().from(internships).where(eq(internships.id, req.params.id)).limit(1);
   if (!internship) throw new AppError("Internship not found", 404);
 
+  if (req.user.role !== "admin") {
+    const [studentProfile] = await db.select().from(students).where(eq(students.userId, req.user.userId)).limit(1);
+    const [umkmProfile] = await db.select().from(umkm).where(eq(umkm.userId, req.user.userId)).limit(1);
+
+    const isStudentOwner = studentProfile?.id === internship.studentId;
+    const isUmkmOwner = umkmProfile?.id === internship.umkmId;
+
+    if (!isStudentOwner && !isUmkmOwner) {
+      throw new AppError("Forbidden. You are not part of this internship.", 403);
+    }
+  }
+
   const updateData = { status };
 
   if (status === "cancelled") {
     updateData.cancelledAt = new Date();
     updateData.cancelReason = cancelReason || null;
+
+    // Cooling-off period: if cancelled < 2 days before start
+    if (internship.startDate) {
+      const twoDaysBefore = new Date(internship.startDate);
+      twoDaysBefore.setDate(twoDaysBefore.getDate() - 2);
+      if (new Date() >= twoDaysBefore) {
+        await createNotification({
+          userId: req.user.userId,
+          type: "system",
+          title: "Periode Pendinginan",
+          body: "Anda membatalkan magang kurang dari H-2. Anda tidak dapat menerima match baru selama 7 hari.",
+          referenceId: internship.id,
+        });
+      }
+    }
   }
 
   if (status === "completed") {
+    if (internship.status !== "active") {
+      throw new AppError("Only active internships can be completed", 400);
+    }
     updateData.completedAt = new Date();
   }
 
   if (status === "active") {
-    updateData.startDate = updateData.startDate || new Date();
+    // FIX BUG: use database startDate, not empty updateData
+    updateData.startDate = internship.startDate || new Date();
+  }
+
+  // Validate transition: scheduled → active → completed
+  const allowedTransitions = {
+    scheduled: ["active", "cancelled"],
+    active: ["completed", "cancelled"],
+    completed: [],
+    cancelled: [],
+  };
+  if (!allowedTransitions[internship.status]?.includes(status)) {
+    throw new AppError(`Cannot transition from ${internship.status} to ${status}`, 400);
   }
 
   await db.update(internships).set(updateData).where(eq(internships.id, req.params.id));
 
+  // Send status change notification
+  const statusMsg = {
+    active: { title: "Magang Dimulai", body: "Status magang Anda telah berubah menjadi aktif." },
+    completed: { title: "Magang Selesai", body: "Selamat! Magang Anda telah selesai. Sertifikat sedang disiapkan." },
+    cancelled: { title: "Magang Dibatalkan", body: "Status magang Anda telah dibatalkan." },
+  };
+
+  if (statusMsg[status]) {
+    await createNotification({
+      userId: internship.studentId,
+      type: status === "completed" ? "certificate" : "schedule",
+      title: statusMsg[status].title,
+      body: statusMsg[status].body,
+      referenceId: internship.id,
+    });
+  }
+
   if (status === "completed") {
-    const certNumber = `SB-${new Date().getFullYear()}-${String(Math.floor(Math.random() * 99999)).padStart(5, "0")}`;
+    const actualDuration = Math.round(
+      (new Date(internship.endDate || Date.now()) - new Date(internship.startDate || Date.now()))
+      / (1000 * 60 * 60 * 24),
+    );
+    const certId = generateId();
+    const certNumber = `SB-${new Date().getFullYear()}-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
+    const metadata = { duration: `${Math.max(1, actualDuration)} days`, issuedVia: "auto" };
+
     await db.insert(certificates).values({
-      id: generateId(),
+      id: certId,
       studentId: internship.studentId,
       internshipId: internship.id,
       certificateNumber: certNumber,
-      metadata: JSON.parse(JSON.stringify({ duration: "14 days", issuedVia: "auto" })),
+      metadata: JSON.parse(JSON.stringify(metadata)),
     });
+
+    // Generate PDF asynchronously
+    try {
+      const [studentRecord] = await db
+        .select({
+          studentName: users.fullName,
+          studentSchool: students.school,
+          studentMajor: students.major,
+        })
+        .from(students)
+        .leftJoin(users, eq(students.userId, users.id))
+        .where(eq(students.id, internship.studentId))
+        .limit(1);
+
+      const [umkmRecord] = await db
+        .select({ businessName: umkm.businessName })
+        .from(umkm)
+        .where(eq(umkm.id, internship.umkmId))
+        .limit(1);
+
+      const pdfRecord = {
+        certificateNumber: certNumber,
+        studentName: studentRecord?.studentName,
+        studentSchool: studentRecord?.studentSchool,
+        studentMajor: studentRecord?.studentMajor,
+        businessName: umkmRecord?.businessName,
+        metadata,
+        issuedAt: new Date(),
+      };
+
+      const filePath = await generateCertificatePdf(pdfRecord);
+      if (filePath) {
+        await db.update(certificates).set({ fileUrl: filePath }).where(eq(certificates.id, certId));
+      }
+    } catch (err) {
+      console.error("Certificate PDF generation failed:", err.message);
+    }
   }
 
   res.json({ message: `Internship ${status}` });

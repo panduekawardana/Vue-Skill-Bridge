@@ -8,6 +8,7 @@ import { umkm } from "../db/schema/umkm.js";
 import { users } from "../db/schema/users.js";
 import { AppError } from "../utils/AppError.js";
 import { asyncHandler } from "../middleware/errorHandler.js";
+import { createNotification } from "./notificationController.js";
 
 function generateId() {
   return crypto.randomUUID();
@@ -62,6 +63,23 @@ export const createEvaluation = asyncHandler(async (req, res) => {
   });
 
   const [created] = await db.select().from(evaluations).where(eq(evaluations.id, id)).limit(1);
+
+  try {
+    const otherUserId = evaluatorRole === "student"
+      ? (await db.select({ userId: umkm.userId }).from(umkm).where(eq(umkm.id, internship.umkmId)).limit(1))[0]?.userId
+      : (await db.select({ userId: students.userId }).from(students).where(eq(students.id, internship.studentId)).limit(1))[0]?.userId;
+
+    if (otherUserId) {
+      await createNotification({
+        userId: otherUserId,
+        type: "evaluation",
+        title: `Ulasan Baru dari ${evaluatorRole === "student" ? "Siswa" : "UMKM"}`,
+        body: `Rating: ${"★".repeat(rating)}${"☆".repeat(5 - rating)}`,
+        referenceId: internshipId,
+      });
+    }
+  } catch (_err) { /* non-blocking */ }
+
   res.status(201).json(created);
 });
 
