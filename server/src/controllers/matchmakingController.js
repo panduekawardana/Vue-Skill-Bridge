@@ -1,5 +1,5 @@
 import crypto from "crypto";
-import { eq, and, or, desc, isNull, inArray } from "drizzle-orm";
+import { eq, and, or, desc, isNull, inArray, lte, gte, ne } from "drizzle-orm";
 import { db } from "../config/database.js";
 import { matchmaking } from "../db/schema/matchmaking.js";
 import { internshipNeeds } from "../db/schema/internshipNeeds.js";
@@ -7,11 +7,139 @@ import { students } from "../db/schema/students.js";
 import { umkm } from "../db/schema/umkm.js";
 import { users } from "../db/schema/users.js";
 import { internships } from "../db/schema/internships.js";
+import { skillTestResults } from "../db/schema/skillTestResults.js";
 import { AppError } from "../utils/AppError.js";
 import { asyncHandler } from "../middleware/errorHandler.js";
+import { createNotification } from "./notificationController.js";
 
 function generateId() {
   return crypto.randomUUID();
+}
+
+const SKILL_SYNONYMS = {
+  javascript: ["js", "ecmascript", "es6", "nodejs", "node.js", "node"],
+  typescript: ["ts"],
+  python: ["py"],
+  php: ["php"],
+  "vue.js": ["vue", "vuejs", "vue2", "vue3"],
+  react: ["reactjs", "react.js"],
+  laravel: ["laravel"],
+  mysql: ["sql", "mariadb", "database"],
+  photoshop: ["ps", "adobe photoshop"],
+  illustrator: ["ai", "adobe illustrator"],
+  canva: ["canva"],
+  excel: ["ms excel", "microsoft excel", "spreadsheet"],
+  myob: ["myob"],
+  networking: ["jaringan", "network", "cisco", "mikrotik"],
+  "ui design": ["ui/ux", "uiux", "user interface", "figma", "xd"],
+  "digital marketing": ["marketing", "pemasaran", "social media", "sosmed"],
+  copywriting: ["copywriting", "copy write", "content writing"],
+};
+
+function normalizeSkill(skill) {
+  const lower = skill.toLowerCase().trim();
+  for (const [canonical, aliases] of Object.entries(SKILL_SYNONYMS)) {
+    if (lower === canonical || aliases.includes(lower)) return canonical;
+  }
+  return lower;
+}
+
+function matchSkills(studentSkills, requiredSkills) {
+  const normalized = (studentSkills || []).map(normalizeSkill);
+  const required = (requiredSkills || []).map(normalizeSkill);
+
+  if (required.length === 0) return 50;
+  if (normalized.length === 0) return 0;
+
+  const matched = normalized.filter((s) =>
+    required.some((rs) => rs.includes(s) || s.includes(rs)),
+  );
+
+  return Math.min(100, Math.round((matched.length / required.length) * 100));
+}
+
+// Map individual skills to test categories for cross-referencing test scores
+const SKILL_TO_CATEGORY = {
+  javascript: "Programming", js: "Programming", typescript: "Programming",
+  python: "Programming", php: "Programming", java: "Programming",
+  "c#": "Programming", "c++": "Programming", go: "Programming",
+  html: "Programming", css: "Programming", nodejs: "Programming",
+  react: "Programming", vue: "Programming", angular: "Programming",
+  laravel: "Programming", codeigniter: "Programming",
+  photoshop: "Desain Grafis", illustrator: "Desain Grafis",
+  canva: "Desain Grafis", coreldraw: "Desain Grafis",
+  figma: "Desain Grafis", "ui design": "Desain Grafis",
+  "after effects": "Multimedia", premiere: "Multimedia",
+  "video editing": "Multimedia", animation: "Multimedia",
+  myob: "Akuntansi", accurate: "Akuntansi",
+  akuntansi: "Akuntansi", accounting: "Akuntansi",
+  "digital marketing": "Pemasaran", pemasaran: "Pemasaran",
+  copywriting: "Pemasaran", "social media": "Pemasaran",
+  seo: "Pemasaran", marketing: "Pemasaran",
+  excel: "Administrasi", spreadsheet: "Administrasi",
+  word: "Administrasi", "microsoft office": "Administrasi",
+  networking: "Jaringan", cisco: "Jaringan",
+  mikrotik: "Jaringan", network: "Jaringan",
+  mysql: "Database", postgresql: "Database",
+  mongodb: "Database", sql: "Database",
+  database: "Database",
+};
+
+function computeMatchScore({
+  studentSkills, requiredSkills,
+  studentMajor, requiredMajor,
+  studentCity, umkmCity,
+  skillBreakdown, recommendedRoles,
+  needTitle, overallScore,
+}) {
+  const skillMatch = matchSkills(studentSkills, requiredSkills);
+
+  let majorMatch = 50;
+  if (requiredMajor && studentMajor) {
+    const nm = requiredMajor.toLowerCase().trim();
+    const sm = studentMajor.toLowerCase().trim();
+    majorMatch = nm === sm ? 100 : (nm.includes(sm) || sm.includes(nm) ? 70 : 30);
+  }
+
+  let testPerformance = (overallScore != null) ? overallScore : 50;
+  if (skillBreakdown && requiredSkills && requiredSkills.length > 0) {
+    const relevantScores = [];
+    for (const skill of requiredSkills) {
+      const cat = SKILL_TO_CATEGORY[normalizeSkill(skill)];
+      if (cat && skillBreakdown[cat] !== undefined) {
+        relevantScores.push(skillBreakdown[cat]);
+      }
+    }
+    if (relevantScores.length > 0) {
+      testPerformance = Math.round(
+        relevantScores.reduce((a, b) => a + b, 0) / relevantScores.length,
+      );
+    }
+  }
+
+  let roleFit = 50;
+  if (recommendedRoles && recommendedRoles.length > 0 && needTitle) {
+    const titleLower = needTitle.toLowerCase();
+    const hasMatch = recommendedRoles.some((role) => {
+      const words = role.toLowerCase().split(/\s+/);
+      return words.some((w) => w.length > 2 && titleLower.includes(w));
+    });
+    roleFit = hasMatch ? 100 : 30;
+  }
+
+  let locationMatch = 50;
+  if (studentCity && umkmCity) {
+    locationMatch = studentCity.toLowerCase() === umkmCity.toLowerCase() ? 100 : 40;
+  }
+
+  const matchScore = Math.round(
+    skillMatch * 0.35 + majorMatch * 0.20 + testPerformance * 0.25 + roleFit * 0.10 + locationMatch * 0.10,
+  );
+
+  return {
+    matchScore,
+    matchDetails: { skillMatch, majorMatch, testPerformance, roleFit, locationMatch },
+  };
 }
 
 export const getMatches = asyncHandler(async (req, res) => {
@@ -153,6 +281,29 @@ export const respondToMatch = asyncHandler(async (req, res) => {
   }
 
   const [updated] = await db.select().from(matchmaking).where(eq(matchmaking.id, match.id)).limit(1);
+
+  // Notify other party about response
+  try {
+    if (response === "accepted" || response === "rejected") {
+      const [need] = await db.select().from(internshipNeeds).where(eq(internshipNeeds.id, match.needId)).limit(1);
+      const [umkmProfile] = await db.select().from(umkm).where(eq(umkm.id, need?.umkmId)).limit(1);
+      const [studentUser] = await db.select({ userId: users.id }).from(users).leftJoin(students, eq(users.id, students.userId)).where(eq(students.id, match.studentId)).limit(1);
+
+      const otherUserId = req.user.role === "student" ? umkmProfile?.userId : studentUser?.userId;
+      const actorName = req.user.role === "student" ? "Siswa" : "UMKM";
+
+      if (otherUserId) {
+        await createNotification({
+          userId: otherUserId,
+          type: "match",
+          title: `Lamaran ${response === "accepted" ? "Diterima" : "Ditolak"}`,
+          body: `${actorName} telah ${response === "accepted" ? "menerima" : "menolak"} lamaran magang.`,
+          referenceId: match.id,
+        });
+      }
+    }
+  } catch (_err) { /* non-blocking */ }
+
   res.json(updated);
 });
 
@@ -164,6 +315,50 @@ async function createInternshipFromMatch(match) {
   const endDate = new Date(startDate);
   endDate.setDate(endDate.getDate() + (need.durationDays || 14));
 
+  // Overlap detection: check if student has any active/scheduled internship in same period
+  const overlapping = await db
+    .select()
+    .from(internships)
+    .where(
+      and(
+        eq(internships.studentId, match.studentId),
+        or(
+          eq(internships.status, "active"),
+          eq(internships.status, "scheduled"),
+        ),
+        and(
+          lte(internships.startDate, endDate),
+          gte(internships.endDate, startDate),
+        ),
+      ),
+    )
+    .limit(1);
+
+  if (overlapping.length > 0) {
+    console.warn(`Overlap detected: student ${match.studentId} already has internship in this period`);
+    return;
+  }
+
+  // UMKM max active check
+  const activeCount = await db
+    .select({ count: sql`COUNT(*)` })
+    .from(internships)
+    .where(
+      and(
+        eq(internships.umkmId, need.umkmId),
+        or(
+          eq(internships.status, "active"),
+          eq(internships.status, "scheduled"),
+        ),
+      ),
+    );
+
+  const count = Number(activeCount[0]?.count || 0);
+  if (count >= 5) {
+    console.warn(`UMKM ${need.umkmId} already has 5 active/scheduled internships`);
+    return;
+  }
+
   await db.insert(internships).values({
     id: generateId(),
     matchId: match.id,
@@ -173,6 +368,43 @@ async function createInternshipFromMatch(match) {
     endDate,
     status: "scheduled",
   });
+
+  // Notification to student
+  try {
+    const [studentUser] = await db
+      .select({ userId: users.id })
+      .from(users)
+      .innerJoin(students, eq(users.id, students.userId))
+      .where(eq(students.id, match.studentId))
+      .limit(1);
+
+    if (studentUser) {
+      const [umkmUser] = await db
+        .select({ userId: users.id, businessName: umkm.businessName })
+        .from(users)
+        .innerJoin(umkm, eq(users.id, umkm.userId))
+        .where(eq(umkm.id, need.umkmId))
+        .limit(1);
+
+      await createNotification({
+        userId: studentUser.userId,
+        type: "schedule",
+        title: "Magang Terjadwal",
+        body: `Magang Anda di ${umkmUser?.businessName || "perusahaan"} telah dijadwalkan mulai ${startDate.toISOString().split("T")[0]}`,
+        referenceId: match.id,
+      });
+
+      if (umkmUser) {
+        await createNotification({
+          userId: umkmUser.userId,
+          type: "schedule",
+          title: "Ada Peserta Magang Baru",
+          body: `Seorang peserta telah terjadwal magang di perusahaan Anda mulai ${startDate.toISOString().split("T")[0]}`,
+          referenceId: match.id,
+        });
+      }
+    }
+  } catch (_err) { /* non-blocking */ }
 
   await db
     .update(internshipNeeds)
@@ -223,52 +455,34 @@ export const studentApplyToNeed = asyncHandler(async (req, res) => {
   // Get UMKM data for location matching
   const [umkmProfile] = await db.select().from(umkm).where(eq(umkm.id, need.umkmId)).limit(1);
 
-  // Calculate match score
-  const studentSkills = studentProfile.skills
-    ? Array.isArray(studentProfile.skills)
-      ? studentProfile.skills
-      : JSON.parse(studentProfile.skills)
-    : [];
-  const requiredSkills = need.requiredSkills
-    ? Array.isArray(need.requiredSkills)
-      ? need.requiredSkills
-      : JSON.parse(need.requiredSkills)
-    : [];
+  // Get latest test results for test performance scoring
+  const [latestResult] = await db
+    .select()
+    .from(skillTestResults)
+    .where(eq(skillTestResults.studentId, studentProfile.id))
+    .orderBy(desc(skillTestResults.createdAt))
+    .limit(1);
 
-  let skillMatch = 50;
-  if (requiredSkills.length > 0 && studentSkills.length > 0) {
-    const matchedSkills = studentSkills.filter((s) =>
-      requiredSkills.some(
-        (rs) =>
-          rs.toLowerCase().includes(s.toLowerCase()) ||
-          s.toLowerCase().includes(rs.toLowerCase()),
-      ),
-    );
-    skillMatch = Math.min(
-      100,
-      Math.round((matchedSkills.length / requiredSkills.length) * 100),
-    );
-  }
+  const studentSkills = Array.isArray(studentProfile.skills)
+    ? studentProfile.skills
+    : (typeof studentProfile.skills === "string" ? JSON.parse(studentProfile.skills) : []);
 
-  let majorMatch = 50;
-  if (need.requiredMajor && studentProfile.major) {
-    majorMatch = need.requiredMajor === studentProfile.major ? 100 : 30;
-  }
+  const requiredSkills = Array.isArray(need.requiredSkills)
+    ? need.requiredSkills
+    : (typeof need.requiredSkills === "string" ? JSON.parse(need.requiredSkills) : []);
 
-  let locationMatch = 50;
-  if (umkmProfile?.city && studentProfile.city) {
-    locationMatch = umkmProfile.city === studentProfile.city ? 100 : 40;
-  }
-
-  const matchScore = Math.round(
-    skillMatch * 0.5 + majorMatch * 0.3 + locationMatch * 0.2,
-  );
-
-  const matchDetails = {
-    skillMatch,
-    majorMatch,
-    location: locationMatch,
-  };
+  const { matchScore, matchDetails } = computeMatchScore({
+    studentSkills,
+    requiredSkills,
+    studentMajor: studentProfile.major,
+    requiredMajor: need.requiredMajor,
+    studentCity: studentProfile.city,
+    umkmCity: umkmProfile?.city,
+    skillBreakdown: latestResult?.skillBreakdown || null,
+    recommendedRoles: latestResult?.recommendedRoles || null,
+    needTitle: need.title,
+    overallScore: latestResult?.overallScore || null,
+  });
 
   const id = generateId();
 
@@ -305,4 +519,213 @@ export const createMatch = asyncHandler(async (req, res) => {
 
   const [created] = await db.select().from(matchmaking).where(eq(matchmaking.id, id)).limit(1);
   res.status(201).json(created);
+});
+
+// ─── AUTO MATCH FROM TEST RESULTS ─────────────────────────
+
+const MAX_PENDING_MATCHES = 10;
+const MATCH_EXPIRY_DAYS = 30;
+
+export async function autoMatchFromTestResults(studentId, skillBreakdown, recommendedRoles) {
+  const [studentProfile] = await db
+    .select()
+    .from(students)
+    .where(eq(students.id, studentId))
+    .limit(1);
+
+  if (!studentProfile) return [];
+
+  // Check pending match limit
+  const [pendingCount] = await db
+    .select({ count: sql`COUNT(*)` })
+    .from(matchmaking)
+    .where(
+      and(
+        eq(matchmaking.studentId, studentId),
+        eq(matchmaking.status, "pending"),
+      ),
+    );
+  if (Number(pendingCount?.count || 0) >= MAX_PENDING_MATCHES) {
+    return [];
+  }
+
+  // Expire old pending matches
+  const expiryDate = new Date();
+  expiryDate.setDate(expiryDate.getDate() - MATCH_EXPIRY_DAYS);
+  await db
+    .update(matchmaking)
+    .set({ status: "expired" })
+    .where(
+      and(
+        eq(matchmaking.status, "pending"),
+        lte(matchmaking.createdAt, expiryDate),
+      ),
+    );
+
+  // Fetch open needs with UMKM location data
+  const openNeeds = await db
+    .select({
+      id: internshipNeeds.id,
+      umkmId: internshipNeeds.umkmId,
+      title: internshipNeeds.title,
+      requiredSkills: internshipNeeds.requiredSkills,
+      requiredMajor: internshipNeeds.requiredMajor,
+      slotCount: internshipNeeds.slotCount,
+      slotFilled: internshipNeeds.slotFilled,
+      durationDays: internshipNeeds.durationDays,
+      startDate: internshipNeeds.startDate,
+      compensation: internshipNeeds.compensation,
+      umkmCity: umkm.city,
+    })
+    .from(internshipNeeds)
+    .leftJoin(umkm, eq(internshipNeeds.umkmId, umkm.id))
+    .where(eq(internshipNeeds.status, "open"));
+
+  if (openNeeds.length === 0) return [];
+
+  const studentSkills = Array.isArray(studentProfile.skills)
+    ? studentProfile.skills
+    : (typeof studentProfile.skills === "string" ? JSON.parse(studentProfile.skills) : []);
+
+  const candidateMatches = [];
+
+  for (const need of openNeeds) {
+    const requiredSkills = Array.isArray(need.requiredSkills)
+      ? need.requiredSkills
+      : (typeof need.requiredSkills === "string" ? JSON.parse(need.requiredSkills) : []);
+
+    const { matchScore, matchDetails } = computeMatchScore({
+      studentSkills,
+      requiredSkills,
+      studentMajor: studentProfile.major,
+      requiredMajor: need.requiredMajor,
+      studentCity: studentProfile.city,
+      umkmCity: need.umkmCity,
+      skillBreakdown,
+      recommendedRoles,
+      needTitle: need.title,
+      overallScore: null,
+    });
+
+    if (matchScore >= 50) {
+      candidateMatches.push({
+        needId: need.id,
+        matchScore,
+        matchDetails,
+        needTitle: need.title,
+      });
+    }
+  }
+
+  candidateMatches.sort((a, b) => b.matchScore - a.matchScore);
+  const topMatches = candidateMatches.slice(0, 3);
+
+  const createdMatches = [];
+
+  for (const m of topMatches) {
+    // Dedup: skip if same pair exists (any status)
+    const [existing] = await db
+      .select()
+      .from(matchmaking)
+      .where(
+        and(
+          eq(matchmaking.studentId, studentId),
+          eq(matchmaking.needId, m.needId),
+        ),
+      )
+      .limit(1);
+
+    if (existing) continue;
+
+    // Re-check limit after expiry cleanup
+    const [currentCount] = await db
+      .select({ count: sql`COUNT(*)` })
+      .from(matchmaking)
+      .where(
+        and(
+          eq(matchmaking.studentId, studentId),
+          eq(matchmaking.status, "pending"),
+        ),
+      );
+    if (Number(currentCount?.count || 0) >= MAX_PENDING_MATCHES) break;
+
+    const id = generateId();
+
+    await db.insert(matchmaking).values({
+      id,
+      studentId,
+      needId: m.needId,
+      matchScore: m.matchScore,
+      matchDetails: m.matchDetails,
+      status: "pending",
+      studentResponse: "pending",
+      umkmResponse: "pending",
+    });
+
+    // Notify student
+    try {
+      await createNotification({
+        userId: studentProfile.userId,
+        type: "match",
+        title: "Rekomendasi Magang Baru",
+        body: `Kami menemukan ${m.needTitle} yang cocok dengan skill Anda (skor: ${m.matchScore})`,
+        referenceId: id,
+      });
+    } catch (_err) { /* non-blocking */ }
+
+    // Notify UMKM
+    try {
+      const [needRecord] = await db
+        .select()
+        .from(internshipNeeds)
+        .where(eq(internshipNeeds.id, m.needId))
+        .limit(1);
+
+      if (needRecord) {
+        const [umkmRecord] = await db
+          .select()
+          .from(umkm)
+          .where(eq(umkm.id, needRecord.umkmId))
+          .limit(1);
+
+        if (umkmRecord) {
+          await createNotification({
+            userId: umkmRecord.userId,
+            type: "match",
+            title: "Ada Kandidat Baru",
+            body: `Siswa baru direkomendasikan untuk ${m.needTitle} (skor: ${m.matchScore})`,
+            referenceId: id,
+          });
+        }
+      }
+    } catch (_err) { /* non-blocking */ }
+
+    createdMatches.push({ id, needId: m.needId, matchScore: m.matchScore });
+  }
+
+  return createdMatches;
+}
+
+// ─── MANUAL TRIGGER AUTO-MATCH ────────────────────────────
+
+export const triggerAutoMatch = asyncHandler(async (req, res) => {
+  const { studentId } = req.body;
+  if (!studentId) throw new AppError("studentId is required", 400);
+
+  const [latestResult] = await db
+    .select()
+    .from(skillTestResults)
+    .where(eq(skillTestResults.studentId, studentId))
+    .orderBy(desc(skillTestResults.createdAt))
+    .limit(1);
+
+  if (!latestResult) throw new AppError("No skill test results found for this student", 404);
+
+  const matches = await autoMatchFromTestResults(
+    studentId,
+    latestResult.skillBreakdown,
+    latestResult.recommendedRoles,
+  );
+
+  res.status(201).json({ message: "Auto-match completed", matches });
 });

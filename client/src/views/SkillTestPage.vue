@@ -114,9 +114,48 @@ function preventCheat(e) {
   }
 }
 
-onMounted(() => {
+async function resumeAttempt(attemptId) {
+  loading.value = true
+  errorMsg.value = ""
+  try {
+    const res = await api.get(`/skill-test/attempts/${attemptId}`)
+    if (!res.resume || res.attempt.status !== "in_progress") {
+      throw new Error("Attempt already completed or expired")
+    }
+
+    // Check if time expired
+    const startedAt = new Date(res.attempt.startedAt).getTime()
+    const elapsed = (Date.now() - startedAt) / 1000
+    const remaining = res.attempt.timeLimit || 15 * 60 - elapsed
+
+    if (remaining <= 0) {
+      throw new Error("Waktu tes telah habis")
+    }
+
+    attemptId.value = res.attempt.id
+    questions.value = res.questions || []
+    timeLimit.value = Math.ceil(remaining / 60)
+
+    // Restore previous answers
+    const restored = {}
+    if (Array.isArray(res.answers)) {
+      for (const a of res.answers) {
+        restored[a.questionId] = a.answerText
+      }
+    }
+    answers.value = restored
+    state.value = "taking"
+    startTimer()
+  } catch (e) {
+    errorMsg.value = e.message
+    state.value = "idle"
+  }
+  loading.value = false
+}
+
+onMounted(async () => {
   if (activeAttemptId) {
-    // Resume or just show — for now treat as new
+    await resumeAttempt(activeAttemptId)
   }
 })
 

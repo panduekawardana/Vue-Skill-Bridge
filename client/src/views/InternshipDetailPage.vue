@@ -188,6 +188,13 @@ onMounted(load)
             <h3 class="font-semibold text-sm">Sertifikat Diterbitkan</h3>
             <p class="text-xs text-muted-foreground">{{ certificate.certificateNumber }} · {{ formatDate(certificate.issuedAt) }}</p>
           </div>
+          <a
+            :href="`http://localhost:5000/api/certificates/${certificate.id}/download`"
+            target="_blank"
+            class="inline-flex items-center gap-1.5 h-9 px-3 rounded-lg bg-emerald-600 text-white text-xs font-medium hover:bg-emerald-700 transition-colors"
+          >
+            <FileText class="h-3.5 w-3.5" /> Unduh PDF
+          </a>
         </div>
       </Card>
 

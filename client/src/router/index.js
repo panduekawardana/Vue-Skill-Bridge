@@ -12,6 +12,7 @@ import MatchmakingPage from '@/views/MatchmakingPage.vue'
 import InternshipDetailPage from '@/views/InternshipDetailPage.vue'
 import EvaluationPage from '@/views/EvaluationPage.vue'
 import ProfileEditPage from '@/views/ProfileEditPage.vue'
+import NotificationsPage from '@/views/NotificationsPage.vue'
 
 function getRoleFromToken() {
   const token = localStorage.getItem('token')
@@ -38,6 +39,7 @@ const router = createRouter({
     { path: '/internships/:id', name: 'internship-detail', component: InternshipDetailPage, meta: { auth: true } },
     { path: '/internships/:id/evaluate', name: 'internship-evaluate', component: EvaluationPage, meta: { auth: true } },
     { path: '/profile/edit', name: 'profile-edit', component: ProfileEditPage, meta: { auth: true } },
+    { path: '/notifications', name: 'notifications', component: NotificationsPage, meta: { auth: true } },
 
     // Admin routes
     { path: '/admin/login', name: 'admin-login', component: AdminLoginPage, meta: { guest: true } },

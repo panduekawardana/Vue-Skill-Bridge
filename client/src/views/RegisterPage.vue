@@ -1,5 +1,5 @@
 <script setup>
-import { ref } from "vue"
+import { ref, computed } from "vue"
 import { useRouter } from "vue-router"
 import { useAuthStore } from "@/stores/auth"
 import Button from "@/components/ui/Button.vue"
@@ -17,16 +17,51 @@ const role = ref("student")
 const showPassword = ref(false)
 const errorMsg = ref("")
 
+// Student fields
+const school = ref("")
+const major = ref("")
+const nisn = ref("")
+const graduationYear = ref(new Date().getFullYear())
+const city = ref("")
+
+// UMKM fields
+const businessName = ref("")
+const businessType = ref("")
+const nib = ref("")
+const address = ref("")
+const umkmCity = ref("")
+
+const isStudent = computed(() => role.value === "student")
+const isUmkm = computed(() => role.value === "umkm")
+
 async function handleRegister() {
   errorMsg.value = ""
   try {
-    await auth.register({
+    const payload = {
       fullName: fullName.value,
       email: email.value,
       phone: phone.value,
       password: password.value,
       role: role.value,
-    })
+    }
+
+    if (isStudent.value) {
+      payload.school = school.value
+      payload.major = major.value
+      payload.nisn = nisn.value || undefined
+      payload.graduationYear = graduationYear.value ? Number(graduationYear.value) : undefined
+      payload.city = city.value
+    }
+
+    if (isUmkm.value) {
+      payload.businessName = businessName.value
+      payload.businessType = businessType.value
+      payload.nib = nib.value
+      payload.address = address.value
+      payload.city = umkmCity.value
+    }
+
+    await auth.register(payload)
     router.push("/dashboard")
   } catch (e) {
     errorMsg.value = e.message
@@ -137,6 +172,82 @@ async function handleRegister() {
               </button>
             </div>
           </div>
+
+          <!-- Student-specific fields -->
+          <template v-if="isStudent">
+            <div class="space-y-2">
+              <label class="text-sm font-medium" for="school">Asal Sekolah</label>
+              <input id="school" v-model="school" type="text" required
+                class="w-full h-10 px-3 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                placeholder="SMK N 1 Jakarta" />
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+              <div class="space-y-2">
+                <label class="text-sm font-medium" for="major">Jurusan</label>
+                <input id="major" v-model="major" type="text" required
+                  class="w-full h-10 px-3 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                  placeholder="Rekayasa Perangkat Lunak" />
+              </div>
+              <div class="space-y-2">
+                <label class="text-sm font-medium" for="graduationYear">Tahun Lulus</label>
+                <input id="graduationYear" v-model="graduationYear" type="number"
+                  class="w-full h-10 px-3 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/50" />
+              </div>
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+              <div class="space-y-2">
+                <label class="text-sm font-medium" for="nisn">NISN</label>
+                <input id="nisn" v-model="nisn" type="text"
+                  class="w-full h-10 px-3 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                  placeholder="1234567890" />
+              </div>
+              <div class="space-y-2">
+                <label class="text-sm font-medium" for="city">Kota</label>
+                <input id="city" v-model="city" type="text"
+                  class="w-full h-10 px-3 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                  placeholder="Jakarta" />
+              </div>
+            </div>
+          </template>
+
+          <!-- UMKM-specific fields -->
+          <template v-if="isUmkm">
+            <div class="space-y-2">
+              <label class="text-sm font-medium" for="businessName">Nama Usaha</label>
+              <input id="businessName" v-model="businessName" type="text" required
+                class="w-full h-10 px-3 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                placeholder="Warung Digital Nusantara" />
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+              <div class="space-y-2">
+                <label class="text-sm font-medium" for="businessType">Bidang Usaha</label>
+                <input id="businessType" v-model="businessType" type="text" required
+                  class="w-full h-10 px-3 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                  placeholder="Teknologi Informasi" />
+              </div>
+              <div class="space-y-2">
+                <label class="text-sm font-medium" for="nib">NIB <span class="text-muted-foreground text-[10px]">(wajib)</span></label>
+                <input id="nib" v-model="nib" type="text" required
+                  class="w-full h-10 px-3 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                  placeholder="912345678901234" />
+              </div>
+            </div>
+            <div class="space-y-2">
+              <label class="text-sm font-medium" for="umkmAddress">Alamat Usaha</label>
+              <input id="umkmAddress" v-model="address" type="text"
+                class="w-full h-10 px-3 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                placeholder="Jl. Merdeka No. 123" />
+            </div>
+            <div class="space-y-2">
+              <label class="text-sm font-medium" for="umkmCity">Kota</label>
+              <input id="umkmCity" v-model="umkmCity" type="text"
+                class="w-full h-10 px-3 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                placeholder="Jakarta" />
+            </div>
+            <div class="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-xs text-amber-700">
+              Setelah mendaftar, akun UMKM Anda perlu diverifikasi oleh admin sebelum dapat memasang kebutuhan magang.
+            </div>
+          </template>
 
           <p v-if="errorMsg" class="text-sm text-destructive bg-destructive/10 rounded-lg px-3 py-2">{{ errorMsg }}</p>
 

@@ -9,6 +9,8 @@ import { students } from "../db/schema/students.js";
 import { admins } from "../db/schema/admins.js";
 import { AppError } from "../utils/AppError.js";
 import { asyncHandler } from "../middleware/errorHandler.js";
+import { autoMatchFromTestResults } from "./matchmakingController.js";
+import { createNotification } from "./notificationController.js";
 
 function generateId() {
   return crypto.randomUUID();
@@ -142,14 +144,42 @@ export const startAttempt = asyncHandler(async (req, res) => {
     status: "in_progress",
   });
 
-  const rawQuestions = await db
+  // Adaptive stratification: select questions by difficulty distribution
+  const allActive = await db
     .select()
     .from(skillTestQuestions)
-    .where(eq(skillTestQuestions.isActive, true))
-    .orderBy(sql`RAND()`)
-    .limit(20);
+    .where(eq(skillTestQuestions.isActive, true));
 
-  const questions = rawQuestions.map(({ correctAnswer, ...q }) => q);
+  const byDifficulty = { beginner: [], intermediate: [], advanced: [] };
+  for (const q of allActive) {
+    if (byDifficulty[q.difficulty]) byDifficulty[q.difficulty].push(q);
+  }
+
+  const shuffle = (arr) => {
+    const a = [...arr];
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+  };
+
+  const pick = (pool, count) => shuffle(pool).slice(0, Math.min(count, pool.length));
+
+  let selected = [
+    ...pick(byDifficulty.beginner, 8),
+    ...pick(byDifficulty.intermediate, 7),
+    ...pick(byDifficulty.advanced, 5),
+  ];
+
+  // Fallback if not enough questions in some difficulty
+  if (selected.length < 20) {
+    const usedIds = new Set(selected.map((q) => q.id));
+    const remaining = allActive.filter((q) => !usedIds.has(q.id));
+    selected = [...selected, ...pick(remaining, 20 - selected.length)];
+  }
+
+  const questions = shuffle(selected).map(({ correctAnswer, ...q }) => q);
 
   res.status(201).json({ attemptId: id, questions, timeLimit: 15 });
 });
@@ -187,18 +217,57 @@ export const getAttempt = asyncHandler(async (req, res) => {
     .from(skillTestAnswers)
     .where(eq(skillTestAnswers.attemptId, attempt.id));
 
+  const questionIds = answers.map((a) => a.questionId);
+
+  // If in_progress, also return unanswered questions for resume
+  if (attempt.status === "in_progress") {
+    const allQuestions = await db
+      .select()
+      .from(skillTestQuestions)
+      .where(and(
+        eq(skillTestQuestions.isActive, true),
+      ));
+
+    // Return questions without correctAnswer for in-progress
+    const questions = allQuestions.map(({ correctAnswer, ...q }) => q);
+    return res.json({ attempt, answers, questions, resume: true });
+  }
+
   const questions = await db
     .select()
     .from(skillTestQuestions)
-    .where(
-      inArray(
-        skillTestQuestions.id,
-        answers.map((a) => a.questionId),
-      ),
-    );
+    .where(inArray(skillTestQuestions.id, questionIds));
 
-  res.json({ attempt, answers, questions });
+  res.json({ attempt, answers, questions, resume: false });
 });
+
+const ESSAY_KEYWORDS = {
+  "perbedaan var let const": ["scope", "hoisting", "reassign", "temporal dead zone", "tdz", "block", "function"],
+  "perbedaan jurnal umum dan buku besar": ["jurnal", "buku besar", "posting", "chronic", "rangkum", "ledger"],
+  "jelaskan": ["karena", "sehingga", "yaitu", "adalah", "pertama", "kedua"],
+};
+
+function gradeEssay(questionText, answerText, pointValue) {
+  const lowerQ = questionText.toLowerCase();
+  const lowerA = answerText.toLowerCase();
+  let matched = 0;
+
+  const keywords = Object.entries(ESSAY_KEYWORDS).find(([key]) => lowerQ.includes(key));
+  const words = keywords ? keywords[1] : [];
+
+  if (words.length === 0) {
+    const wordCount = lowerA.split(/\s+/).filter(Boolean).length;
+    matched = wordCount >= 20 ? 3 : wordCount >= 10 ? 2 : wordCount >= 5 ? 1 : 0;
+  } else {
+    for (const w of words) {
+      if (lowerA.includes(w)) matched++;
+    }
+  }
+
+  const ratio = words.length > 0 ? matched / words.length : matched / 3;
+  const score = Math.round(Math.min(1, ratio) * pointValue);
+  return { score, isCorrect: score >= Math.ceil(pointValue * 0.5) };
+}
 
 export const submitAttempt = asyncHandler(async (req, res) => {
   const { answers } = req.body;
@@ -214,6 +283,17 @@ export const submitAttempt = asyncHandler(async (req, res) => {
 
   if (!attempt) throw new AppError("Attempt not found", 404);
   if (attempt.status !== "in_progress") throw new AppError("Attempt already completed or expired", 400);
+
+  // Server-side timeout check
+  const timeLimit = 15 * 60 * 1000;
+  const elapsed = Date.now() - new Date(attempt.startedAt).getTime();
+  if (elapsed >= timeLimit) {
+    await db
+      .update(skillTestAttempts)
+      .set({ status: "expired", completedAt: new Date() })
+      .where(eq(skillTestAttempts.id, attempt.id));
+    throw new AppError("Time limit exceeded", 400);
+  }
 
   const [studentProfile] = await db.select().from(students).where(eq(students.userId, req.user.userId)).limit(1);
   if (studentProfile?.id !== attempt.studentId) {
@@ -245,6 +325,14 @@ export const submitAttempt = asyncHandler(async (req, res) => {
     if (question.questionType === "multiple_choice" && question.correctAnswer) {
       isCorrect = ans.answerText === question.correctAnswer;
       score = isCorrect ? question.pointValue : 0;
+    } else if (question.questionType === "essay") {
+      const result = gradeEssay(question.questionText, ans.answerText, question.pointValue || 10);
+      isCorrect = result.isCorrect;
+      score = result.score;
+    } else if (question.questionType === "coding") {
+      const result = gradeEssay(question.questionText, ans.answerText, question.pointValue || 10);
+      isCorrect = result.isCorrect;
+      score = result.score;
     }
 
     await db.insert(skillTestAnswers).values({
@@ -344,7 +432,32 @@ export const submitAttempt = asyncHandler(async (req, res) => {
     recommendedRoles,
   });
 
-  res.json({ message: "Attempt submitted", score: overallScore, skillBreakdown, recommendedRoles });
+  // Notification
+  try {
+    await createNotification({
+      userId: req.user.userId,
+      type: "system",
+      title: "Skill Test Selesai!",
+      body: `Skor kamu: ${overallScore}. Kami akan mencari magang yang cocok dengan hasil tes kamu.`,
+      referenceId: attempt.id,
+    });
+  } catch (_err) { /* non-blocking */ }
+
+  // Auto-matchmaking from test results
+  let autoMatches = [];
+  try {
+    autoMatches = await autoMatchFromTestResults(attempt.studentId, skillBreakdown, recommendedRoles);
+  } catch (err) {
+    console.error("Auto-match error:", err.message);
+  }
+
+  res.json({
+    message: "Attempt submitted",
+    score: overallScore,
+    skillBreakdown,
+    recommendedRoles,
+    autoMatches,
+  });
 });
 
 // ─── RESULTS ────────────────────────────────────────────────
