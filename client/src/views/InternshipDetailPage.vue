@@ -7,9 +7,10 @@ import Badge from "@/components/ui/Badge.vue"
 import Button from "@/components/ui/Button.vue"
 import { api } from "@/lib/api"
 import {
-  ArrowLeft, Calendar, Clock, CheckCircle, XCircle, FileText,
+  Calendar, Clock, CheckCircle, XCircle, FileText,
   MessageSquare, Star, Loader2, Send, Medal, User, Building2,
 } from "@lucide/vue"
+import DashboardLayout from "@/components/layout/DashboardLayout.vue"
 
 const router = useRouter()
 const route = useRoute()
@@ -124,12 +125,9 @@ onMounted(load)
 </script>
 
 <template>
-  <div class="max-w-3xl mx-auto py-10 px-4">
-    <button class="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground mb-6" @click="router.push('/dashboard')">
-      <ArrowLeft class="h-4 w-4" /> Kembali ke Dashboard
-    </button>
-
-    <div v-if="loading" class="text-center py-16 text-muted-foreground">Memuat...</div>
+  <DashboardLayout title="Detail Magang">
+    <div class="max-w-3xl mx-auto">
+      <div v-if="loading" class="text-center py-16 text-muted-foreground">Memuat...</div>
 
     <div v-else-if="errorMsg" class="rounded-lg bg-destructive/10 border border-destructive/30 px-4 py-3 text-sm text-destructive">
       {{ errorMsg }}
@@ -260,5 +258,6 @@ onMounted(load)
         </div>
       </Card>
     </template>
-  </div>
+    </div>
+  </DashboardLayout>
 </template>

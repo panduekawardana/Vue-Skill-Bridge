@@ -5,7 +5,8 @@ import Card from "@/components/ui/Card.vue"
 import Badge from "@/components/ui/Badge.vue"
 import Button from "@/components/ui/Button.vue"
 import { api } from "@/lib/api"
-import { ArrowLeft, BarChart3, ChevronDown, ChevronRight, Medal, Target } from "@lucide/vue"
+import { BarChart3, ChevronDown, ChevronRight, Medal, Target } from "@lucide/vue"
+import DashboardLayout from "@/components/layout/DashboardLayout.vue"
 
 const router = useRouter()
 const results = ref([])
@@ -33,12 +34,9 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="max-w-3xl mx-auto py-10 px-4">
-    <button class="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground mb-6" @click="router.push('/dashboard')">
-      <ArrowLeft class="h-4 w-4" /> Kembali ke Dashboard
-    </button>
-
-    <h1 class="text-2xl font-bold mb-1">Hasil Skill Test</h1>
+  <DashboardLayout title="Hasil Tes">
+    <div class="max-w-3xl mx-auto">
+      <h1 class="text-2xl font-bold mb-1">Hasil Skill Test</h1>
     <p class="text-muted-foreground text-sm mb-6">Riwayat dan rincian hasil tes keahlian Anda.</p>
 
     <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
@@ -123,5 +121,6 @@ onMounted(async () => {
         </div>
       </Card>
     </div>
-  </div>
+    </div>
+  </DashboardLayout>
 </template>

@@ -6,7 +6,8 @@ import Card from "@/components/ui/Card.vue"
 import Badge from "@/components/ui/Badge.vue"
 import Button from "@/components/ui/Button.vue"
 import { api } from "@/lib/api"
-import { Search, Briefcase, MapPin, Users, Clock, Loader2, Check, XCircle, ArrowLeft } from "@lucide/vue"
+import { Search, Briefcase, MapPin, Users, Clock, Loader2, Check, XCircle } from "@lucide/vue"
+import DashboardLayout from "@/components/layout/DashboardLayout.vue"
 
 const router = useRouter()
 const auth = useAuthStore()
@@ -67,12 +68,9 @@ onMounted(loadNeeds)
 </script>
 
 <template>
-  <div class="max-w-4xl mx-auto py-10 px-4">
-    <button class="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground mb-6" @click="router.push('/dashboard')">
-      <ArrowLeft class="h-4 w-4" /> Kembali ke Dashboard
-    </button>
-
-    <h1 class="text-2xl font-bold mb-1">Cari Kebutuhan Magang</h1>
+  <DashboardLayout title="Cari Magang">
+    <div class="max-w-4xl mx-auto">
+      <h1 class="text-2xl font-bold mb-1">Cari Kebutuhan Magang</h1>
     <p class="text-muted-foreground text-sm mb-6">Temukan magang mikro yang sesuai dengan jurusan dan minatmu.</p>
 
     <div v-if="errorMsg" class="rounded-lg bg-destructive/10 border border-destructive/30 px-4 py-3 text-sm text-destructive mb-6">
@@ -139,5 +137,6 @@ onMounted(loadNeeds)
         </div>
       </Card>
     </div>
-  </div>
+    </div>
+  </DashboardLayout>
 </template>

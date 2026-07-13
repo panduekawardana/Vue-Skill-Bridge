@@ -5,7 +5,8 @@ import { useAuthStore } from "@/stores/auth"
 import Card from "@/components/ui/Card.vue"
 import Button from "@/components/ui/Button.vue"
 import { api } from "@/lib/api"
-import { ArrowLeft, Star, Loader2, Send } from "@lucide/vue"
+import { Star, Loader2, Send } from "@lucide/vue"
+import DashboardLayout from "@/components/layout/DashboardLayout.vue"
 
 const router = useRouter()
 const route = useRoute()
@@ -53,12 +54,9 @@ onMounted(load)
 </script>
 
 <template>
-  <div class="max-w-xl mx-auto py-16 px-4">
-    <button class="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground mb-6" @click="router.push(`/internships/${route.params.id}`)">
-      <ArrowLeft class="h-4 w-4" /> Kembali
-    </button>
-
-    <Card class="p-6">
+  <DashboardLayout title="Evaluasi">
+    <div class="max-w-xl mx-auto">
+      <Card class="p-6">
       <div class="text-center mb-6">
         <div class="flex h-14 w-14 items-center justify-center rounded-full bg-amber-100 text-amber-600 mx-auto mb-3">
           <Star class="h-7 w-7" />
@@ -96,5 +94,6 @@ onMounted(load)
         {{ saving ? "Mengirim..." : "Kirim Ulasan" }}
       </Button>
     </Card>
-  </div>
+    </div>
+  </DashboardLayout>
 </template>

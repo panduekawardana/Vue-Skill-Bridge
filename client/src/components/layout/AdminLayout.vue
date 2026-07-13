@@ -52,24 +52,13 @@ function isActive(path) {
   <div class="min-h-screen bg-secondary/20 flex">
     <aside class="w-64 border-r border-border bg-white flex flex-col flex-shrink-0">
       <div class="p-5 border-b border-border">
-        <div class="flex items-center gap-3 mb-3">
+        <div class="flex items-center gap-3">
           <div class="flex h-9 w-9 items-center justify-center rounded-lg bg-amber-500 text-white">
             <Shield class="h-5 w-5" />
           </div>
           <div>
             <p class="text-sm font-bold">Skill Bridge</p>
             <p class="text-xs text-muted-foreground">Admin Panel</p>
-          </div>
-        </div>
-        <div class="flex items-center gap-2">
-          <div class="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-primary text-xs font-bold">
-            {{ auth.user?.fullName?.charAt(0)?.toUpperCase() || "?" }}
-          </div>
-          <div class="min-w-0">
-            <p class="text-xs font-semibold truncate">{{ auth.user?.fullName }}</p>
-            <span :class="['inline-block text-[10px] px-1.5 py-0.5 rounded-full font-medium', roleColor]">
-              {{ roleBadge }}
-            </span>
           </div>
         </div>
       </div>
@@ -91,7 +80,18 @@ function isActive(path) {
         </button>
       </nav>
 
-      <div class="p-3 border-t border-border">
+      <div class="p-3 border-t border-border space-y-2">
+        <div class="flex items-center gap-2.5 px-3 py-2">
+          <div class="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-primary text-xs font-bold flex-shrink-0">
+            {{ auth.user?.fullName?.charAt(0)?.toUpperCase() || "?" }}
+          </div>
+          <div class="min-w-0 flex-1">
+            <p class="text-xs font-semibold truncate">{{ auth.user?.fullName }}</p>
+            <span :class="['inline-block text-[10px] px-1.5 py-0.5 rounded-full font-medium mt-0.5', roleColor]">
+              {{ roleBadge }}
+            </span>
+          </div>
+        </div>
         <button
           class="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
           @click="handleLogout"

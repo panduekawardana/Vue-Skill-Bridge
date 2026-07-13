@@ -5,7 +5,8 @@ import { useAuthStore } from "@/stores/auth"
 import Card from "@/components/ui/Card.vue"
 import Button from "@/components/ui/Button.vue"
 import { api } from "@/lib/api"
-import { ArrowLeft, Loader2, Plus, X } from "@lucide/vue"
+import { Loader2, Plus, X } from "@lucide/vue"
+import DashboardLayout from "@/components/layout/DashboardLayout.vue"
 
 const router = useRouter()
 const route = useRoute()
@@ -99,12 +100,9 @@ const isVerified = computed(() => auth.profile?.isVerified)
 </script>
 
 <template>
-  <div class="max-w-2xl mx-auto py-10 px-4">
-    <button class="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground mb-6" @click="router.push('/dashboard')">
-      <ArrowLeft class="h-4 w-4" /> Kembali ke Dashboard
-    </button>
-
-    <h1 class="text-2xl font-bold mb-1">{{ isEdit ? "Edit Kebutuhan" : "Pasang Kebutuhan Baru" }}</h1>
+  <DashboardLayout title="Pasang Kebutuhan">
+    <div class="max-w-2xl mx-auto">
+      <h1 class="text-2xl font-bold mb-1">{{ isEdit ? "Edit Kebutuhan" : "Pasang Kebutuhan Baru" }}</h1>
     <p class="text-muted-foreground text-sm mb-6">{{ isEdit ? "Ubah detail kebutuhan magang Anda." : "Isi detail kebutuhan magang untuk dicocokkan dengan siswa." }}</p>
 
     <div v-if="loadingNeed" class="text-center py-12 text-muted-foreground">Memuat data kebutuhan...</div>
@@ -190,5 +188,6 @@ const isVerified = computed(() => auth.profile?.isVerified)
         </form>
       </Card>
     </template>
-  </div>
+    </div>
+  </DashboardLayout>
 </template>

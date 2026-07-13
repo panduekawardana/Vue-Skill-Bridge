@@ -1,21 +1,22 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from "vue"
 import { useRouter, useRoute } from "vue-router"
+import DashboardLayout from "@/components/layout/DashboardLayout.vue"
 import Card from "@/components/ui/Card.vue"
 import Button from "@/components/ui/Button.vue"
 import Badge from "@/components/ui/Badge.vue"
 import { api } from "@/lib/api"
-import { Clock, Loader2, AlertTriangle, ChevronLeft, ChevronRight, Check, FileText, ArrowLeft } from "@lucide/vue"
+import { Clock, Loader2, AlertTriangle, ChevronLeft, ChevronRight, Check, FileText } from "@lucide/vue"
 
 const router = useRouter()
 const route = useRoute()
 
-const state = ref("idle") // idle | taking | submitting | done | error
+const state = ref("idle")
 const attemptId = ref(null)
 const questions = ref([])
 const answers = ref({})
 const currentIndex = ref(0)
-const timeLimit = ref(15) // minutes
+const timeLimit = ref(15)
 const timeRemaining = ref(0)
 const result = ref(null)
 const errorMsg = ref("")
@@ -107,7 +108,6 @@ function formatQuestionType(type) {
   return map[type] || type
 }
 
-// Anti-cheat: prevent copy/context menu
 function preventCheat(e) {
   if (e.type === "copy" || e.type === "cut") {
     e.preventDefault()
@@ -123,7 +123,6 @@ async function resumeAttempt(attemptId) {
       throw new Error("Attempt already completed or expired")
     }
 
-    // Check if time expired
     const startedAt = new Date(res.attempt.startedAt).getTime()
     const elapsed = (Date.now() - startedAt) / 1000
     const remaining = res.attempt.timeLimit || 15 * 60 - elapsed
@@ -136,7 +135,6 @@ async function resumeAttempt(attemptId) {
     questions.value = res.questions || []
     timeLimit.value = Math.ceil(remaining / 60)
 
-    // Restore previous answers
     const restored = {}
     if (Array.isArray(res.answers)) {
       for (const a of res.answers) {
@@ -165,13 +163,9 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="min-h-screen bg-secondary/20">
-    <!-- IDLE STATE: Start screen -->
-    <div v-if="state === 'idle'" class="max-w-xl mx-auto py-16 px-4">
-      <button class="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground mb-6" @click="router.push('/dashboard')">
-        <ArrowLeft class="h-4 w-4" /> Kembali ke Dashboard
-      </button>
-
+  <!-- IDLE: with sidebar -->
+  <DashboardLayout v-if="state === 'idle'" title="Skill Test">
+    <div class="max-w-xl">
       <Card class="p-8 text-center">
         <div class="flex h-16 w-16 items-center justify-center rounded-2xl bg-amber-100 text-amber-600 mx-auto mb-5">
           <FileText class="h-8 w-8" />
@@ -210,10 +204,11 @@ onUnmounted(() => {
         </p>
       </Card>
     </div>
+  </DashboardLayout>
 
-    <!-- TAKING STATE: Active test -->
-    <div v-if="state === 'taking' || state === 'submitting'" class="max-w-3xl mx-auto py-6 px-4">
-      <!-- Top bar: timer + progress -->
+  <!-- TAKING: full screen (no sidebar) -->
+  <div v-if="state === 'taking' || state === 'submitting'" class="min-h-screen bg-secondary/20">
+    <div class="max-w-3xl mx-auto py-6 px-4">
       <div class="flex items-center justify-between mb-4">
         <div class="flex items-center gap-2">
           <Clock :class="['h-4 w-4', timeWarning ? 'text-destructive animate-pulse' : 'text-muted-foreground']" />
@@ -233,7 +228,6 @@ onUnmounted(() => {
         {{ errorMsg }}
       </div>
 
-      <!-- Question card -->
       <Card v-if="currentQuestion" class="p-6" @copy="preventCheat" @cut="preventCheat" @contextmenu.prevent>
         <div class="flex items-center gap-2 mb-4">
           <Badge variant="secondary" class="text-[10px]">{{ currentQuestion.category }}</Badge>
@@ -243,7 +237,6 @@ onUnmounted(() => {
 
         <h3 class="font-semibold text-sm mb-4">Soal {{ currentIndex + 1 }}: {{ currentQuestion.questionText }}</h3>
 
-        <!-- Multiple Choice -->
         <div v-if="currentQuestion.questionType === 'multiple_choice'" class="space-y-2">
           <label
             v-for="opt in (currentQuestion.options || [])"
@@ -270,7 +263,6 @@ onUnmounted(() => {
           </label>
         </div>
 
-        <!-- Essay -->
         <div v-else>
           <textarea
             :value="answers[currentQuestion.id] || ''"
@@ -283,7 +275,6 @@ onUnmounted(() => {
           />
         </div>
 
-        <!-- Navigation -->
         <div class="flex items-center justify-between mt-6 pt-4 border-t border-border">
           <Button variant="outline" size="sm" :disabled="currentIndex === 0" @click="goTo(currentIndex - 1)">
             <ChevronLeft class="h-4 w-4 mr-1" /> Sebelumnya
@@ -313,7 +304,6 @@ onUnmounted(() => {
         </div>
       </Card>
 
-      <!-- Confirm submit modal -->
       <Teleport to="body">
         <div v-if="showConfirm" class="fixed inset-0 z-50 flex items-center justify-center bg-black/40" @click.self="showConfirm = false">
           <Card class="w-full max-w-sm p-6 shadow-xl">
@@ -340,9 +330,11 @@ onUnmounted(() => {
         </div>
       </Teleport>
     </div>
+  </div>
 
-    <!-- DONE STATE: Results -->
-    <div v-if="state === 'done'" class="max-w-xl mx-auto py-16 px-4">
+  <!-- DONE: full screen result -->
+  <div v-if="state === 'done'" class="min-h-screen bg-secondary/20">
+    <div class="max-w-xl mx-auto py-16 px-4">
       <Card class="p-8 text-center">
         <div class="flex h-20 w-20 items-center justify-center rounded-full mx-auto mb-5"
           :class="result.score >= 70 ? 'bg-emerald-100' : result.score >= 40 ? 'bg-amber-100' : 'bg-red-100'">
