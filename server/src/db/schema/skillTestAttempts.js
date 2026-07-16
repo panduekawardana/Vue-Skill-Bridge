@@ -1,4 +1,4 @@
-import { mysqlTable, varchar, int, timestamp, mysqlEnum } from "drizzle-orm/mysql-core";
+import { mysqlTable, varchar, int, timestamp, mysqlEnum, json } from "drizzle-orm/mysql-core";
 import { students } from "./students.js";
 
 export const skillTestAttempts = mysqlTable("skill_test_attempts", {
@@ -6,6 +6,7 @@ export const skillTestAttempts = mysqlTable("skill_test_attempts", {
   studentId: varchar("student_id", { length: 36 })
     .notNull()
     .references(() => students.id),
+  questionIds: json("question_ids"),
   startedAt: timestamp("started_at").notNull(),
   completedAt: timestamp("completed_at"),
   status: mysqlEnum("status", ["in_progress", "completed", "expired"]).notNull().default("in_progress"),

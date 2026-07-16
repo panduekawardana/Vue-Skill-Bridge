@@ -15,15 +15,23 @@ import EvaluationPage from '@/views/EvaluationPage.vue'
 import ProfileEditPage from '@/views/ProfileEditPage.vue'
 import NotificationsPage from '@/views/NotificationsPage.vue'
 
-function getRoleFromToken() {
+function getTokenPayload() {
   const token = localStorage.getItem('token')
   if (!token) return null
   try {
-    return JSON.parse(atob(token.split('.')[1])).role
+    const payload = JSON.parse(atob(token.split('.')[1]))
+    if (payload.exp && payload.exp * 1000 < Date.now()) {
+      localStorage.removeItem('token')
+      return null
+    }
+    return payload
   } catch {
     return null
   }
 }
+
+// const ADMIN_SUPERADMIN_ROUTES = ['admin-matches', 'admin-settings']
+// const ADMIN_MODERATOR_PLUS_ROUTES = ['admin-verification', 'admin-questions']
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -62,13 +70,13 @@ const router = createRouter({
       path: '/admin/verification',
       name: 'admin-verification',
       component: AdminDashboardPage,
-      meta: { auth: true, adminOnly: true },
+      meta: { auth: true, adminOnly: true, minRoleLevel: 'moderator' },
     },
     {
       path: '/admin/questions',
       name: 'admin-questions',
       component: AdminDashboardPage,
-      meta: { auth: true, adminOnly: true },
+      meta: { auth: true, adminOnly: true, minRoleLevel: 'moderator' },
     },
     {
       path: '/admin/internships',
@@ -80,7 +88,7 @@ const router = createRouter({
       path: '/admin/matches',
       name: 'admin-matches',
       component: AdminDashboardPage,
-      meta: { auth: true, adminOnly: true },
+      meta: { auth: true, adminOnly: true, minRoleLevel: 'superadmin' },
     },
     {
       path: '/admin/tickets',
@@ -92,22 +100,43 @@ const router = createRouter({
       path: '/admin/settings',
       name: 'admin-settings',
       component: AdminDashboardPage,
-      meta: { auth: true, adminOnly: true },
+      meta: { auth: true, adminOnly: true, minRoleLevel: 'superadmin' },
     },
   ],
 })
 
-router.beforeEach((to) => {
-  const token = localStorage.getItem('token')
-  const isAuthenticated = !!token
-  const role = getRoleFromToken()
+const ROLE_HIERARCHY = { superadmin: 3, moderator: 2, support: 1 }
+
+router.beforeEach(async (to) => {
+  const payload = getTokenPayload()
+  const isAuthenticated = !!payload
+  const role = payload?.role || null
 
   if (to.meta.auth && !isAuthenticated) {
     return { name: to.meta.adminOnly ? 'admin-login' : 'login' }
   }
+
   if (to.meta.adminOnly && role !== 'admin') {
     return { name: 'dashboard' }
   }
+
+  // Check roleLevel for admin routes
+  if (to.meta.adminOnly && to.meta.minRoleLevel && role === 'admin') {
+    try {
+      const { useAuthStore } = await import('@/stores/auth')
+      const auth = useAuthStore()
+      if (!auth.profile) await auth.fetchProfile()
+      const userLevel = auth.userRoleLevel
+      const requiredLevel = ROLE_HIERARCHY[to.meta.minRoleLevel] || 0
+      const currentLevel = ROLE_HIERARCHY[userLevel] || 0
+      if (currentLevel < requiredLevel) {
+        return { name: 'admin-dashboard' }
+      }
+    } catch {
+      return { name: 'admin-dashboard' }
+    }
+  }
+
   if (to.meta.guest && isAuthenticated) {
     if (to.name === 'admin-login') {
       return { name: role === 'admin' ? 'admin-dashboard' : 'dashboard' }

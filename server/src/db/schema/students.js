@@ -16,5 +16,6 @@ export const students = mysqlTable("students", {
   portfolioUrl: text("portfolio_url"),
   address: text("address"),
   city: varchar("city", { length: 100 }),
+  coolingOffUntil: timestamp("cooling_off_until"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });

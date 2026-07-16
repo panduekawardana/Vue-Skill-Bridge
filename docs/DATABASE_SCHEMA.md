@@ -1,7 +1,7 @@
 # Skill Bridge — Database Schema
 
-> **Database:** PostgreSQL
-> **ORM:** Prisma
+> **Database:** MySQL
+> **ORM:** Drizzle ORM (mysql2)
 
 ---
 

@@ -21,8 +21,8 @@ export const createEvaluation = asyncHandler(async (req, res) => {
     throw new AppError("internshipId and rating are required", 400);
   }
 
-  if (rating < 1 || rating > 5) {
-    throw new AppError("Rating must be between 1 and 5", 400);
+  if (!Number.isInteger(rating) || rating < 1 || rating > 5) {
+    throw new AppError("Rating must be an integer between 1 and 5", 400);
   }
 
   const [internship] = await db.select().from(internships).where(eq(internships.id, internshipId)).limit(1);

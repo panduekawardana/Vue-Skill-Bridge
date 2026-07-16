@@ -1,6 +1,6 @@
 import { defineStore } from "pinia"
 import { ref, computed } from "vue"
-import { api } from "@/lib/api"
+import { api, setOnUnauthorized } from "@/lib/api"
 
 export const useAuthStore = defineStore("auth", () => {
   const user = ref(null)
@@ -12,6 +12,10 @@ export const useAuthStore = defineStore("auth", () => {
   const isAuthenticated = computed(() => !!token.value)
   const userRole = computed(() => user.value?.role ?? null)
   const userRoleLevel = computed(() => profile.value?.roleLevel ?? null)
+
+  setOnUnauthorized(() => {
+    logout()
+  })
 
   async function fetchProfile() {
     try {

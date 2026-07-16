@@ -7,7 +7,7 @@ import Card from "@/components/ui/Card.vue"
 import Button from "@/components/ui/Button.vue"
 import Badge from "@/components/ui/Badge.vue"
 import { api } from "@/lib/api"
-import { Check, X, User, School, Briefcase, Zap, Loader2, MessageSquare, Sparkles } from "@lucide/vue"
+import { Check, X, User, School, Briefcase, Zap, Loader2, MessageSquare, Sparkles, Clock } from "@lucide/vue"
 
 const router = useRouter()
 const auth = useAuthStore()
@@ -21,14 +21,20 @@ const isStudent = computed(() => auth.userRole === "student")
 const isUmkm = computed(() => auth.userRole === "umkm")
 
 const pendingMatches = computed(() => matches.value.filter(m => m.status === "pending"))
-const studentPendingRespond = computed(() =>
-  matches.value.filter(m => m.status === "pending" && m.studentResponse === "pending" && m.studentName)
+const studentWaitingUmkm = computed(() =>
+  matches.value.filter(m => m.status === "pending" && m.studentResponse === "accepted" && m.umkmResponse === "pending")
 )
 const studentAutoRecommendations = computed(() =>
   matches.value.filter(m => m.status === "pending" && m.studentResponse === "pending")
 )
 const umkmPendingRespond = computed(() =>
   matches.value.filter(m => m.status === "pending" && m.umkmResponse === "pending" && m.businessName)
+)
+const umkmAutoCandidates = computed(() =>
+  matches.value.filter(m => m.status === "pending" && m.umkmResponse === "pending" && m.source === "auto")
+)
+const umkmStudentApply = computed(() =>
+  matches.value.filter(m => m.status === "pending" && m.umkmResponse === "pending" && m.source === "student_apply")
 )
 const acceptedMatches = computed(() => matches.value.filter(m => m.status === "accepted"))
 const rejectedMatches = computed(() => matches.value.filter(m => m.status === "rejected"))
@@ -131,6 +137,24 @@ onMounted(load)
           </div>
         </div>
 
+        <div class="mb-6" v-if="studentWaitingUmkm.length > 0">
+          <div class="flex items-center gap-2 mb-3">
+            <Clock class="h-4 w-4 text-amber-500" />
+            <h2 class="font-semibold text-sm">Menunggu Respon UMKM</h2>
+            <Badge variant="secondary" class="text-[10px]">{{ studentWaitingUmkm.length }}</Badge>
+          </div>
+          <div v-for="m in studentWaitingUmkm" :key="m.id" class="border border-amber-200 rounded-lg p-3 mb-2 bg-amber-50/50 flex items-center gap-3">
+            <div class="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-600 text-xs font-bold">
+              <Clock class="h-4 w-4" />
+            </div>
+            <div class="flex-1 min-w-0">
+              <p class="text-sm font-medium">{{ m.needTitle }}</p>
+              <p class="text-xs text-muted-foreground">{{ m.businessName }}</p>
+            </div>
+            <Badge variant="outline" class="text-[10px] text-amber-600">Menunggu</Badge>
+          </div>
+        </div>
+
         <div class="mb-6" v-if="acceptedMatches.length > 0">
           <div class="flex items-center gap-2 mb-3">
             <h2 class="font-semibold text-sm">Diterima</h2>
@@ -170,16 +194,75 @@ onMounted(load)
       <template v-if="isUmkm">
         <div class="mb-8">
           <div class="flex items-center gap-2 mb-3">
-            <h2 class="font-semibold text-sm">Menunggu Respon</h2>
-            <Badge v-if="umkmPendingRespond.length > 0" variant="default" class="text-[10px]">{{ umkmPendingRespond.length }}</Badge>
+            <Sparkles class="h-4 w-4 text-primary" />
+            <h2 class="font-semibold text-sm">Rekomendasi Sistem</h2>
+            <Badge v-if="umkmAutoCandidates.length > 0" variant="default" class="text-[10px]">{{ umkmAutoCandidates.length }}</Badge>
           </div>
 
-          <div v-if="umkmPendingRespond.length === 0 && !loading" class="text-center py-8 bg-secondary/20 rounded-lg">
+          <div v-if="umkmAutoCandidates.length === 0 && !loading" class="text-center py-8 bg-secondary/20 rounded-lg">
+            <Sparkles class="h-8 w-8 mx-auto mb-2 opacity-40 text-muted-foreground" />
+            <p class="text-sm text-muted-foreground">Belum ada kandidat dari sistem.</p>
+          </div>
+
+          <div v-for="m in umkmAutoCandidates" :key="m.id" class="border border-primary/20 rounded-lg p-4 mb-3 bg-primary/5">
+            <div class="flex items-start gap-4">
+              <div class="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary text-sm font-bold">
+                {{ m.studentName?.charAt(0) || "?" }}
+              </div>
+              <div class="flex-1 min-w-0">
+                <div class="flex items-center gap-2 mb-1">
+                  <h3 class="font-semibold text-sm">{{ m.studentName }}</h3>
+                  <Badge variant="outline" class="text-[10px]">Skor {{ m.matchScore || "—" }}</Badge>
+                  <Badge variant="secondary" class="text-[10px]">Auto</Badge>
+                </div>
+                <div class="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground mb-2">
+                  <span class="flex items-center gap-1"><School class="h-3 w-3" /> {{ m.studentSchool }} · {{ m.studentMajor }}</span>
+                </div>
+                <div v-if="m.matchDetails" class="text-[10px] text-muted-foreground mb-2 space-y-1">
+                  <div class="flex flex-wrap gap-x-3 gap-y-0.5">
+                    <span>Skill: {{ m.matchDetails.skillMatch || 0 }}%</span>
+                    <span>Jurusan: {{ m.matchDetails.majorMatch || 0 }}%</span>
+                    <span>Nilai Tes: {{ m.matchDetails.testPerformance || 0 }}%</span>
+                    <span>Lokasi: {{ m.matchDetails.locationMatch || 0 }}%</span>
+                  </div>
+                  <div class="w-full h-1 bg-secondary rounded-full overflow-hidden">
+                    <div class="h-full bg-primary rounded-full transition-all" :style="{ width: (m.matchScore || 0) + '%' }" />
+                  </div>
+                </div>
+                <p class="text-xs text-muted-foreground mb-2">
+                  Direkomendasikan untuk: <span class="font-medium text-foreground">{{ m.needTitle }}</span>
+                </p>
+                <div v-if="m.studentSkills" class="flex flex-wrap gap-1 mb-3">
+                  <span v-for="s in formatSkills(m.studentSkills)" :key="s" class="text-[10px] bg-secondary px-1.5 py-0.5 rounded">{{ s }}</span>
+                </div>
+                <div class="flex gap-2">
+                  <Button size="sm" :disabled="actionLoading === m.id" @click="respond(m.id, 'accepted')">
+                    <Check v-if="actionLoading !== m.id" class="h-3.5 w-3.5 mr-1" />
+                    <Loader2 v-else class="h-3.5 w-3.5 mr-1 animate-spin" />
+                    Terima
+                  </Button>
+                  <Button size="sm" variant="destructive" :disabled="actionLoading === m.id" @click="respond(m.id, 'rejected')">
+                    <X class="h-3.5 w-3.5 mr-1" />Tolak
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="mb-8">
+          <div class="flex items-center gap-2 mb-3">
+            <User class="h-4 w-4 text-amber-500" />
+            <h2 class="font-semibold text-sm">Pelamar Langsung</h2>
+            <Badge v-if="umkmStudentApply.length > 0" variant="default" class="text-[10px]">{{ umkmStudentApply.length }}</Badge>
+          </div>
+
+          <div v-if="umkmStudentApply.length === 0 && !loading" class="text-center py-8 bg-secondary/20 rounded-lg">
             <User class="h-8 w-8 mx-auto mb-2 opacity-40 text-muted-foreground" />
-            <p class="text-sm text-muted-foreground">Belum ada pelamar yang perlu direspon</p>
+            <p class="text-sm text-muted-foreground">Belum ada pelamar langsung.</p>
           </div>
 
-          <div v-for="m in umkmPendingRespond" :key="m.id" class="border border-border rounded-lg p-4 mb-3 bg-white">
+          <div v-for="m in umkmStudentApply" :key="m.id" class="border border-border rounded-lg p-4 mb-3 bg-white">
             <div class="flex items-start gap-4">
               <div class="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-600 text-sm font-bold">
                 {{ m.studentName?.charAt(0) || "?" }}
@@ -188,6 +271,7 @@ onMounted(load)
                 <div class="flex items-center gap-2 mb-1">
                   <h3 class="font-semibold text-sm">{{ m.studentName }}</h3>
                   <Badge variant="outline" class="text-[10px]">Skor {{ m.matchScore || "—" }}</Badge>
+                  <Badge variant="secondary" class="text-[10px] bg-amber-100 text-amber-700">Daftar Minat</Badge>
                 </div>
                 <div class="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground mb-2">
                   <span class="flex items-center gap-1"><School class="h-3 w-3" /> {{ m.studentSchool }} · {{ m.studentMajor }}</span>

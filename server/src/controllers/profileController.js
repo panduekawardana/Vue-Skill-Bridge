@@ -140,8 +140,6 @@ export const getUmkmDetail = asyncHandler(async (req, res) => {
       userId: umkm.userId,
       businessName: umkm.businessName,
       businessType: umkm.businessType,
-      nib: umkm.nib,
-      taxId: umkm.taxId,
       description: umkm.description,
       address: umkm.address,
       city: umkm.city,
@@ -149,10 +147,8 @@ export const getUmkmDetail = asyncHandler(async (req, res) => {
       website: umkm.website,
       logoUrl: umkm.logoUrl,
       isVerified: umkm.isVerified,
-      verifiedAt: umkm.verifiedAt,
       email: users.email,
       fullName: users.fullName,
-      phone: users.phone,
     })
     .from(umkm)
     .leftJoin(users, eq(umkm.userId, users.id))

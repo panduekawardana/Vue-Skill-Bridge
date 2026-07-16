@@ -9,11 +9,6 @@ export function errorHandler(err, _req, res, _next) {
     message = "Invalid JSON in request body";
   }
 
-  if (err.name === "CastError") {
-    statusCode = 400;
-    message = "Invalid ID format";
-  }
-
   if (err.code === "ER_DUP_ENTRY") {
     statusCode = 409;
     message = "Duplicate entry. The record already exists.";

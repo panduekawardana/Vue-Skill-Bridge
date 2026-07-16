@@ -29,8 +29,10 @@ export const useNotificationStore = defineStore("notification", () => {
     try {
       await api.patch(`/notifications/${id}/read`)
       const found = items.value.find((n) => n.id === id)
-      if (found) found.isRead = true
-      unreadCount.value = Math.max(0, unreadCount.value - 1)
+      if (found && !found.isRead) {
+        found.isRead = true
+        unreadCount.value = Math.max(0, unreadCount.value - 1)
+      }
     } catch {
       // silent
     }

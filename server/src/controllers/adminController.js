@@ -7,6 +7,13 @@ import { umkm } from "../db/schema/umkm.js";
 import { admins } from "../db/schema/admins.js";
 import { internships } from "../db/schema/internships.js";
 import { matchmaking } from "../db/schema/matchmaking.js";
+import { skillTestAttempts } from "../db/schema/skillTestAttempts.js";
+import { skillTestAnswers } from "../db/schema/skillTestAnswers.js";
+import { skillTestResults } from "../db/schema/skillTestResults.js";
+import { evaluations } from "../db/schema/evaluations.js";
+import { certificates } from "../db/schema/certificates.js";
+import { notifications } from "../db/schema/notifications.js";
+import { supportTickets } from "../db/schema/supportTickets.js";
 import { AppError } from "../utils/AppError.js";
 import { asyncHandler } from "../middleware/errorHandler.js";
 import { internshipNeeds } from "../db/schema/internshipNeeds.js";
@@ -174,9 +181,38 @@ export const deleteUser = asyncHandler(async (req, res) => {
   const [user] = await db.select().from(users).where(eq(users.id, req.params.id)).limit(1);
   if (!user) throw new AppError("User not found", 404);
 
-  if (user.role === "student") await db.delete(students).where(eq(students.userId, user.id));
-  if (user.role === "umkm") await db.delete(umkm).where(eq(umkm.userId, user.id));
-  if (user.role === "admin") await db.delete(admins).where(eq(admins.userId, user.id));
+  // Cascade delete related data
+  if (user.role === "student") {
+    const [profile] = await db.select().from(students).where(eq(students.userId, user.id)).limit(1);
+    if (profile) {
+      await db.delete(skillTestAnswers).where(
+        sql`${skillTestAnswers.attemptId} IN (SELECT id FROM ${skillTestAttempts} WHERE student_id = ${profile.id})`
+      );
+      await db.delete(skillTestResults).where(eq(skillTestResults.studentId, profile.id));
+      await db.delete(skillTestAttempts).where(eq(skillTestAttempts.studentId, profile.id));
+      await db.delete(matchmaking).where(eq(matchmaking.studentId, profile.id));
+      await db.delete(certificates).where(eq(certificates.studentId, profile.id));
+      await db.delete(students).where(eq(students.id, profile.id));
+    }
+  }
+
+  if (user.role === "umkm") {
+    const [profile] = await db.select().from(umkm).where(eq(umkm.userId, user.id)).limit(1);
+    if (profile) {
+      await db.delete(internshipNeeds).where(eq(internshipNeeds.umkmId, profile.id));
+      await db.delete(umkm).where(eq(umkm.id, profile.id));
+    }
+  }
+
+  if (user.role === "admin") {
+    await db.delete(admins).where(eq(admins.userId, user.id));
+  }
+
+  // Delete evaluations, notifications, and support tickets referencing this user
+  await db.delete(evaluations).where(sql`${evaluations.internshipId} IN (SELECT id FROM ${internships} WHERE student_id = (SELECT id FROM ${students} WHERE user_id = ${user.id}) OR umkm_id = (SELECT id FROM ${umkm} WHERE user_id = ${user.id}))`);
+  await db.delete(notifications).where(eq(notifications.userId, user.id));
+  await db.delete(supportTickets).where(eq(supportTickets.userId, user.id));
+  await db.delete(supportTickets).where(eq(supportTickets.createdBy, user.id));
 
   await db.delete(users).where(eq(users.id, user.id));
   res.json({ message: "User deleted successfully" });

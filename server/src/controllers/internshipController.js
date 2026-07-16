@@ -254,6 +254,18 @@ export const getInternship = asyncHandler(async (req, res) => {
     .limit(1);
 
   if (!result) throw new AppError("Internship not found", 404);
+
+  // Ownership check: non-admin users can only view their own internships
+  if (req.user.role !== "admin") {
+    const [studentProfile] = await db.select().from(students).where(eq(students.userId, req.user.userId)).limit(1);
+    const [umkmProfile] = await db.select().from(umkm).where(eq(umkm.userId, req.user.userId)).limit(1);
+    const isStudentOwner = studentProfile?.id === result.studentId;
+    const isUmkmOwner = umkmProfile?.id === result.umkmId;
+    if (!isStudentOwner && !isUmkmOwner) {
+      throw new AppError("Forbidden. You are not part of this internship.", 403);
+    }
+  }
+
   res.json(result);
 });
 
@@ -288,6 +300,15 @@ export const updateInternshipStatus = asyncHandler(async (req, res) => {
       const twoDaysBefore = new Date(internship.startDate);
       twoDaysBefore.setDate(twoDaysBefore.getDate() - 2);
       if (new Date() >= twoDaysBefore) {
+        // Set cooling-off for 7 days
+        const coolingOffUntil = new Date();
+        coolingOffUntil.setDate(coolingOffUntil.getDate() + 7);
+
+        const [studentProfile] = await db.select().from(students).where(eq(students.id, internship.studentId)).limit(1);
+        if (studentProfile) {
+          await db.update(students).set({ coolingOffUntil }).where(eq(students.id, internship.studentId));
+        }
+
         await createNotification({
           userId: req.user.userId,
           type: "system",
@@ -332,13 +353,23 @@ export const updateInternshipStatus = asyncHandler(async (req, res) => {
   };
 
   if (statusMsg[status]) {
-    await createNotification({
-      userId: internship.studentId,
-      type: status === "completed" ? "certificate" : "schedule",
-      title: statusMsg[status].title,
-      body: statusMsg[status].body,
-      referenceId: internship.id,
-    });
+    // Fix: join to get user ID instead of using studentId (students.id)
+    const [studentUser] = await db
+      .select({ userId: users.id })
+      .from(users)
+      .innerJoin(students, eq(users.id, students.userId))
+      .where(eq(students.id, internship.studentId))
+      .limit(1);
+
+    if (studentUser) {
+      await createNotification({
+        userId: studentUser.userId,
+        type: status === "completed" ? "certificate" : "schedule",
+        title: statusMsg[status].title,
+        body: statusMsg[status].body,
+        referenceId: internship.id,
+      });
+    }
   }
 
   if (status === "completed") {
@@ -406,6 +437,10 @@ export const addDailyLog = asyncHandler(async (req, res) => {
 
   const [internship] = await db.select().from(internships).where(eq(internships.id, req.params.id)).limit(1);
   if (!internship) throw new AppError("Internship not found", 404);
+
+  if (internship.status !== "active") {
+    throw new AppError("Can only add daily logs to active internships", 400);
+  }
 
   const [studentProfile] = await db.select().from(students).where(eq(students.userId, req.user.userId)).limit(1);
   if (studentProfile?.id !== internship.studentId) {

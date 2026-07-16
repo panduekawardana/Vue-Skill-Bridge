@@ -1,4 +1,10 @@
-const BASE_URL = "http://localhost:5000/api";
+const BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+
+let onUnauthorized = null;
+
+export function setOnUnauthorized(handler) {
+  onUnauthorized = handler;
+}
 
 async function request(endpoint, options = {}) {
   const token = localStorage.getItem("token")
@@ -15,6 +21,11 @@ async function request(endpoint, options = {}) {
   })
 
   const data = await res.json()
+
+  if (res.status === 401) {
+    if (onUnauthorized) onUnauthorized();
+    throw new Error("Sesi telah berakhir. Silakan login kembali.");
+  }
 
   if (!res.ok) {
     throw new Error(data.error || "Terjadi kesalahan")

@@ -135,15 +135,6 @@ export const startAttempt = asyncHandler(async (req, res) => {
     }
   }
 
-  const id = generateId();
-
-  await db.insert(skillTestAttempts).values({
-    id,
-    studentId: studentProfile.id,
-    startedAt: new Date(),
-    status: "in_progress",
-  });
-
   // Adaptive stratification: select questions by difficulty distribution
   const allActive = await db
     .select()
@@ -178,6 +169,16 @@ export const startAttempt = asyncHandler(async (req, res) => {
     const remaining = allActive.filter((q) => !usedIds.has(q.id));
     selected = [...selected, ...pick(remaining, 20 - selected.length)];
   }
+
+  const id = generateId();
+
+  await db.insert(skillTestAttempts).values({
+    id,
+    studentId: studentProfile.id,
+    startedAt: new Date(),
+    status: "in_progress",
+    questionIds: JSON.parse(JSON.stringify(selected.map((q) => q.id))),
+  });
 
   const questions = shuffle(selected).map(({ correctAnswer, ...q }) => q);
 
@@ -221,16 +222,30 @@ export const getAttempt = asyncHandler(async (req, res) => {
 
   // If in_progress, also return unanswered questions for resume
   if (attempt.status === "in_progress") {
-    const allQuestions = await db
-      .select()
-      .from(skillTestQuestions)
-      .where(and(
-        eq(skillTestQuestions.isActive, true),
-      ));
+    const assignedIds = Array.isArray(attempt.questionIds)
+      ? attempt.questionIds
+      : (typeof attempt.questionIds === "string" ? JSON.parse(attempt.questionIds) : null);
 
-    // Return questions without correctAnswer for in-progress
-    const questions = allQuestions.map(({ correctAnswer, ...q }) => q);
-    return res.json({ attempt, answers, questions, resume: true });
+    if (assignedIds && assignedIds.length > 0) {
+      const questions = await db
+        .select()
+        .from(skillTestQuestions)
+        .where(inArray(skillTestQuestions.id, assignedIds))
+        .map(({ correctAnswer, ...q }) => q);
+      return res.json({ attempt, answers, questions, resume: true });
+    }
+
+    // Fallback: no stored questionIds (legacy data) — return answered questions only
+    if (questionIds.length > 0) {
+      const questions = await db
+        .select()
+        .from(skillTestQuestions)
+        .where(inArray(skillTestQuestions.id, questionIds))
+        .map(({ correctAnswer, ...q }) => q);
+      return res.json({ attempt, answers, questions, resume: true });
+    }
+
+    return res.json({ attempt, answers, questions: [], resume: true });
   }
 
   const questions = await db
@@ -257,7 +272,7 @@ function gradeEssay(questionText, answerText, pointValue) {
 
   if (words.length === 0) {
     const wordCount = lowerA.split(/\s+/).filter(Boolean).length;
-    matched = wordCount >= 20 ? 3 : wordCount >= 10 ? 2 : wordCount >= 5 ? 1 : 0;
+    matched = wordCount >= 30 ? 3 : wordCount >= 20 ? 2 : wordCount >= 10 ? 1 : 0;
   } else {
     for (const w of words) {
       if (lowerA.includes(w)) matched++;
@@ -330,9 +345,13 @@ export const submitAttempt = asyncHandler(async (req, res) => {
       isCorrect = result.isCorrect;
       score = result.score;
     } else if (question.questionType === "coding") {
-      const result = gradeEssay(question.questionText, ans.answerText, question.pointValue || 10);
-      isCorrect = result.isCorrect;
-      score = result.score;
+      // Coding questions: check if answer contains code-like content
+      const hasCode = ans.answerText && ans.answerText.trim().length > 10;
+      const hasKeywords = question.correctAnswer
+        ? question.correctAnswer.toLowerCase().split(/[,\s]+/).filter(w => w.length > 2).some(kw => ans.answerText.toLowerCase().includes(kw))
+        : false;
+      score = hasCode ? (hasKeywords ? question.pointValue : Math.round(question.pointValue * 0.5)) : 0;
+      isCorrect = score >= Math.ceil((question.pointValue || 10) * 0.5);
     }
 
     await db.insert(skillTestAnswers).values({

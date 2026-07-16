@@ -125,7 +125,7 @@ async function resumeAttempt(attemptId) {
 
     const startedAt = new Date(res.attempt.startedAt).getTime()
     const elapsed = (Date.now() - startedAt) / 1000
-    const remaining = res.attempt.timeLimit || 15 * 60 - elapsed
+    const remaining = (res.attempt.timeLimit || 15 * 60) - elapsed
 
     if (remaining <= 0) {
       throw new Error("Waktu tes telah habis")
@@ -361,11 +361,11 @@ onUnmounted(() => {
         </div>
 
         <div class="flex gap-3">
-          <Button class="flex-1" @click="router.push('/internship-needs/browse')">
-            Cari Magang
+          <Button class="flex-1" @click="router.push('/matchmaking')">
+            Lihat Rekomendasi
           </Button>
-          <Button variant="outline" class="flex-1" @click="router.push('/dashboard')">
-            Kembali ke Dashboard
+          <Button variant="outline" class="flex-1" @click="router.push('/internship-needs/browse')">
+            Cari Magang
           </Button>
         </div>
       </Card>

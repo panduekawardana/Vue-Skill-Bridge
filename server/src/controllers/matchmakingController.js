@@ -1,5 +1,5 @@
 import crypto from "crypto";
-import { eq, and, or, desc, isNull, inArray, lte, gte, ne } from "drizzle-orm";
+import { eq, and, or, desc, isNull, inArray, lte, gte, ne, sql } from "drizzle-orm";
 import { db } from "../config/database.js";
 import { matchmaking } from "../db/schema/matchmaking.js";
 import { internshipNeeds } from "../db/schema/internshipNeeds.js";
@@ -53,7 +53,7 @@ function matchSkills(studentSkills, requiredSkills) {
   if (normalized.length === 0) return 0;
 
   const matched = normalized.filter((s) =>
-    required.some((rs) => rs.includes(s) || s.includes(rs)),
+    required.some((rs) => s === rs || (s.length > 2 && rs.length > 2 && (rs.includes(s) || s.includes(rs)))),
   );
 
   return Math.min(100, Math.round((matched.length / required.length) * 100));
@@ -147,7 +147,11 @@ export const getMatches = asyncHandler(async (req, res) => {
   const { status } = req.query;
   const conditions = [];
 
-  if (status) conditions.push(eq(matchmaking.status, status));
+  if (status) {
+    conditions.push(eq(matchmaking.status, status));
+  } else {
+    conditions.push(ne(matchmaking.status, "expired"));
+  }
 
   const [studentProfile] = await db.select().from(students).where(eq(students.userId, req.user.userId)).limit(1);
   const [umkmProfile] = await db.select().from(umkm).where(eq(umkm.userId, req.user.userId)).limit(1);
@@ -173,6 +177,7 @@ export const getMatches = asyncHandler(async (req, res) => {
       needId: matchmaking.needId,
       matchScore: matchmaking.matchScore,
       matchDetails: matchmaking.matchDetails,
+      source: matchmaking.source,
       status: matchmaking.status,
       studentResponse: matchmaking.studentResponse,
       umkmResponse: matchmaking.umkmResponse,
@@ -307,7 +312,9 @@ export const respondToMatch = asyncHandler(async (req, res) => {
 
     await db.update(matchmaking).set(updateData).where(eq(matchmaking.id, match.id));
 
-    if (response === "accepted" && match.umkmResponse === "accepted") {
+    // Re-read after update to avoid race condition
+    const [freshMatch] = await db.select().from(matchmaking).where(eq(matchmaking.id, match.id)).limit(1);
+    if (response === "accepted" && freshMatch?.umkmResponse === "accepted") {
       await db.update(matchmaking).set({ status: "accepted", matchedAt: new Date() }).where(eq(matchmaking.id, match.id));
       await createInternshipFromMatch(match);
     }
@@ -328,7 +335,9 @@ export const respondToMatch = asyncHandler(async (req, res) => {
 
     await db.update(matchmaking).set(updateData).where(eq(matchmaking.id, match.id));
 
-    if (response === "accepted" && match.studentResponse === "accepted") {
+    // Re-read after update to avoid race condition
+    const [freshMatch] = await db.select().from(matchmaking).where(eq(matchmaking.id, match.id)).limit(1);
+    if (response === "accepted" && freshMatch?.studentResponse === "accepted") {
       await db.update(matchmaking).set({ status: "accepted", matchedAt: new Date() }).where(eq(matchmaking.id, match.id));
       await createInternshipFromMatch(match);
     }
@@ -390,7 +399,7 @@ async function createInternshipFromMatch(match) {
 
   if (overlapping.length > 0) {
     console.warn(`Overlap detected: student ${match.studentId} already has internship in this period`);
-    return;
+    return { error: "overlap", message: "Siswa sudah memiliki magang di periode yang sama" };
   }
 
   // UMKM max active check
@@ -410,7 +419,7 @@ async function createInternshipFromMatch(match) {
   const count = Number(activeCount[0]?.count || 0);
   if (count >= 5) {
     console.warn(`UMKM ${need.umkmId} already has 5 active/scheduled internships`);
-    return;
+    return { error: "max_capacity", message: "UMKM sudah mencapai batas magang aktif" };
   }
 
   await db.insert(internships).values({
@@ -462,7 +471,7 @@ async function createInternshipFromMatch(match) {
 
   await db
     .update(internshipNeeds)
-    .set({ slotFilled: need.slotFilled + 1 })
+    .set({ slotFilled: sql`COALESCE(${internshipNeeds.slotFilled}, 0) + 1` })
     .where(eq(internshipNeeds.id, need.id));
 
   const [updatedNeed] = await db.select().from(internshipNeeds).where(eq(internshipNeeds.id, need.id)).limit(1);
@@ -476,6 +485,12 @@ export const studentApplyToNeed = asyncHandler(async (req, res) => {
 
   const [studentProfile] = await db.select().from(students).where(eq(students.userId, req.user.userId)).limit(1);
   if (!studentProfile) throw new AppError("Student profile not found", 404);
+
+  // Check cooling-off period
+  if (studentProfile.coolingOffUntil && new Date(studentProfile.coolingOffUntil) > new Date()) {
+    const until = new Date(studentProfile.coolingOffUntil).toLocaleDateString("id-ID");
+    throw new AppError(`Anda dalam periode pendinginan hingga ${until}. Tidak dapat melamar magang baru.`, 403);
+  }
 
   const [need] = await db
     .select({
@@ -546,6 +561,7 @@ export const studentApplyToNeed = asyncHandler(async (req, res) => {
     needId,
     matchScore,
     matchDetails,
+    source: "student_apply",
     status: "pending",
     studentResponse: "accepted",
   });
@@ -569,6 +585,7 @@ export const createMatch = asyncHandler(async (req, res) => {
     needId,
     matchScore: matchScore || null,
     matchDetails: matchDetails ? JSON.parse(JSON.stringify(matchDetails)) : null,
+    source: "admin",
   });
 
   const [created] = await db.select().from(matchmaking).where(eq(matchmaking.id, id)).limit(1);
@@ -588,6 +605,11 @@ export async function autoMatchFromTestResults(studentId, skillBreakdown, recomm
     .limit(1);
 
   if (!studentProfile) return [];
+
+  // Check cooling-off period
+  if (studentProfile.coolingOffUntil && new Date(studentProfile.coolingOffUntil) > new Date()) {
+    return [];
+  }
 
   // Check pending match limit
   const [pendingCount] = await db
@@ -711,6 +733,7 @@ export async function autoMatchFromTestResults(studentId, skillBreakdown, recomm
       needId: m.needId,
       matchScore: m.matchScore,
       matchDetails: m.matchDetails,
+      source: "auto",
       status: "pending",
       studentResponse: "pending",
       umkmResponse: "pending",

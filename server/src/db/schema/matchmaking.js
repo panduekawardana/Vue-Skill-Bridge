@@ -14,6 +14,7 @@ export const matchmaking = mysqlTable(
       .references(() => internshipNeeds.id),
     matchScore: decimal("match_score", { precision: 5, scale: 2 }),
     matchDetails: json("match_details"),
+    source: mysqlEnum("source", ["auto", "student_apply", "admin"]).default("auto"),
     status: mysqlEnum("status", ["pending", "accepted", "rejected", "expired"])
       .notNull()
       .default("pending"),

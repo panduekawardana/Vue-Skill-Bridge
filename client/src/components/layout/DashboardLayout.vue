@@ -46,7 +46,11 @@ const umkmNav = [
   { name: "profile-edit", label: "Profil UMKM", icon: Building2, path: "/profile/edit" },
 ]
 
-const navItems = auth.userRole === "student" ? studentNav : auth.userRole === "umkm" ? umkmNav : []
+const adminNav = [
+  { name: "admin-dashboard", label: "Dashboard Admin", icon: LayoutDashboard, path: "/admin/dashboard" },
+]
+
+const navItems = auth.userRole === "student" ? studentNav : auth.userRole === "umkm" ? umkmNav : auth.userRole === "admin" ? adminNav : []
 
 const notifTypeIcon = {
   match: "Zap",

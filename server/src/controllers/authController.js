@@ -35,8 +35,8 @@ export const register = asyncHandler(async (req, res) => {
     throw new AppError("email, phone, password, fullName, and role are required", 400);
   }
 
-  if (!["student", "umkm", "admin"].includes(role)) {
-    throw new AppError("Invalid role. Must be student, umkm, or admin", 400);
+  if (!["student", "umkm"].includes(role)) {
+    throw new AppError("Invalid role. Must be student or umkm. Admin accounts are created by superadmin only.", 400);
   }
 
   const existingUser = await db.select().from(users).where(eq(users.email, email)).limit(1);
